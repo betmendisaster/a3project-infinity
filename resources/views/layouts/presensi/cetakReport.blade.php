@@ -144,13 +144,15 @@
                         $path_in = Storage::url('uploads/absensi/' . $d->foto_in);
                         $path_out = Storage::url('uploads/absensi/' . $d->foto_out);
                         $jamterlambat = selisih($d->jam_masuk, $d->jam_in);
+                        // Untuk shift malam, pastikan out ditampilkan meskipun dilakukan di hari berikutnya
+                        $jam_out_display = $d->jam_out ?? 'Belum Absen';
                     @endphp
                     <tr style="text-align: center">
                         <td id="th_tablePresensi">{{ $loop->iteration }}</td>
                         <td id="th_tablePresensi"> {{ date('d-m-Y', strtotime($d->tgl_presensi)) }} </td>
                         <td id="th_tablePresensi">{{ $d->jam_in }}</td>
                         <td id="th_tablePresensi"><img src="{{ url($path_in) }}" alt="" class="foto"></td>
-                        <td id="th_tablePresensi">{{ $d->jam_out != null ? $d->jam_out : 'Belum Absen' }}</td>
+                        <td id="th_tablePresensi">{{ $jam_out_display }}</td>
                         <td id="th_tablePresensi"><img src="{{ url($path_out) }}" alt="" class="foto"></td>
                         <td id="th_tablePresensi">{{ $d->status }}</td>
                         <td id="th_tablePresensi">

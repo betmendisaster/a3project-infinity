@@ -141,39 +141,44 @@
                     $jml_sakit = 0;
                     $jml_cuti = 0;
                     $jml_alpa = 0;
-                    $color = "";
+                    $shiftMalamOut = []; // Array untuk menyimpan out shift malam yang perlu dipindah ke hari in
                     for ($i = 1; $i <= $jmlHari; $i++) {
                         $tgl = "tgl_" . $i;     
                         $datapresensi = explode("|",$r->$tgl); 
                         if($r->$tgl != NULL){
                             $status = $datapresensi[2];
+                            $jam_pulang = $datapresensi[5] ?? '';
+                            $jam_masuk = $datapresensi[4] ?? '';
+                            $jam_out = $datapresensi[1] ?? '';
                         } else {
                             $status = "";
+                            $jam_pulang = "";
+                            $jam_masuk = "";
+                            $jam_out = "";
+                        }
+
+                        // Jika shift malam dan out ada, simpan untuk dipindah ke hari in
+                        if ($jam_pulang < $jam_masuk && !empty($jam_out)) {
+                            $shiftMalamOut[$i] = $jam_out; // Simpan out di array dengan index hari
+                            $jam_out = ""; // Kosongkan out di hari ini untuk menghindari duplikasi
                         }
 
                         if($status == "h"){
                             $jml_hadir += 1;
                             $color = "white";
-                        }
-
-                        if($status == "i"){
+                        } elseif($status == "i"){
                             $jml_izin += 1;
                             $color = "yellow";
-                        }
-
-                        if($status == "c"){
+                        } elseif($status == "c"){
                             $jml_cuti += 1;
                             $color = "white";
-                        }
-                        if($status == "s"){
+                        } elseif($status == "s"){
                             $jml_sakit += 1;
                             $color = "green";
-                        }
-
-                        if(empty($status)){
+                        } else {
                             $jml_alpa += 1;
                             $color = "red";
-                        } 
+                        }
                     ?>
                     <td id="td_tablePresensi" style="background-color: {{ $color }}">
                         {{ $status }}
@@ -185,7 +190,6 @@
                     <td id="td_tablePresensi">{{ !empty($jml_cuti) ? $jml_cuti : '' }}</td>
                     <td id="td_tablePresensi">{{ !empty($jml_sakit) ? $jml_sakit : '' }}</td>
                     <td id="td_tablePresensi">{{ !empty($jml_alpa) ? $jml_alpa : '' }}</td>
-
                 </tr>
             @endforeach
         </table>

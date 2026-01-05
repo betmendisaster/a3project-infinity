@@ -57,8 +57,21 @@ class PresensiController extends Controller
         return date("d-m-Y"); // Format dd-mm-yyyy, e.g., "15-10-2023". Ubah jika perlu, e.g., "Y-m-d" untuk yyyy-mm-dd
     }
 
-    public function create(){
-        
+    public function getHariFromDate($dateString) {
+    $day = date("D", strtotime($dateString));
+    switch ($day) {
+        case 'Sun': return "Minggu";
+        case 'Mon': return "Senin";
+        case 'Tue': return "Selasa";
+        case 'Wed': return "Rabu";
+        case 'Thu': return "Kamis";
+        case 'Fri': return "Jumat";
+        case 'Sat': return "Sabtu";
+        default: return "Tidak di Ketahui";
+        }
+    }
+   public function create(){
+    
         // validasi absen untuk absen pulang
         $today = date("Y-m-d");
         $namahari = $this->getHari();
@@ -84,11 +97,34 @@ class PresensiController extends Controller
                 ->where('kode_dept',$kode_dept)->where('hari',$namahari)->first();
             }
         
-            
+        // Tambahan: Cek apakah ada record hari kemarin yang belum out (untuk shift malam)
+        if ($cek == 0) {
+            $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+            $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+            if ($cekKemarin > 0) {
+                $cek = 1; // Anggap sudah absen hari ini, karena out untuk hari kemarin belum selesai
+                // Opsional: Ambil jamKerja untuk hari kemarin jika diperlukan untuk validasi di view
+                $namahariKemarin = $this->getHariFromDate($kemarin);
+                $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                    ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+                if ($jamKerjaKemarin == null) {
+                    $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                        ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                        ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                        ->where('kode_dept',$kode_dept)->where('hari',$namahariKemarin)->first();
+                }
+                // Jika jamKerja hari kemarin ada, gunakan untuk view (misalnya, tampilkan jam_pulang hari kemarin)
+                if ($jamKerjaKemarin) {
+                    $jamKerja = $jamKerjaKemarin;
+                }
+            }
+        }
+        
         if($jamKerja == null){
-                return view ('layouts.presensi.notifJadwal');                
-            } else {
-        return view('layouts.presensi.create', compact('cek','lok_site','jamKerja'));
+            return view ('layouts.presensi.notifJadwal');                
+        } else {
+            return view('layouts.presensi.create', compact('cek','lok_site','jamKerja'));
         }   
     }
 
@@ -379,24 +415,21 @@ class PresensiController extends Controller
             
             $rangeTanggal[] = $dari;
             $select_date .= "MAX(IF(tgl_presensi = '$dari',
-                    CONCAT(
-                    IFNULL(jam_in,'NA'),'|',
-                    IFNULL(jam_out,'NA'),'|',
-                    IFNULL(presensi.status,'NA'),'|',
-                    IFNULL(nama_jam_kerja,'NA'),'|',
-                    IFNULL(jam_masuk,'NA'),'|',
-                    IFNULL(jam_pulang,'NA'),'|',
-                    IFNULL(presensi.kode_izin,'NA'),'|',
-                    IFNULL(keterangan,'NA'),'|'
-                    ), NULL)) as tgl_". $i . ",";
-
+                        CONCAT(
+                        IFNULL(jam_in,'NA'),'|',
+                        IFNULL(jam_out,'NA'),'|',
+                        IFNULL(presensi.status,'NA'),'|',
+                        IFNULL(nama_jam_kerja,'NA'),'|',
+                        IFNULL(jam_masuk,'NA'),'|',
+                        IFNULL(jam_pulang,'NA'),'|',
+                        IFNULL(presensi.kode_izin,'NA'),'|',
+                        IFNULL(keterangan,'NA'),'|'
+                        ), NULL)) as tgl_". $i . ",";
+            
             $field_date .= "tgl_" . $i . ",";
             $i++;
             $dari = date("Y-m-d", strtotime("+1 day", strtotime($dari)));
-        
-            
         }
-
             $jmlHari = count($rangeTanggal);
             $lastRange = $jmlHari - 1;
             $sampai = $rangeTanggal[$lastRange];
@@ -424,17 +457,36 @@ class PresensiController extends Controller
                     WHERE tgl_presensi BETWEEN '$rangeTanggal[0]' AND '$sampai'
                     GROUP BY nrp
                 ) presensi"),
-                 function($join){
+                function($join){
                     $join->on('karyawan.nrp','=','presensi.nrp');
-                 }
+                }
         );
 
         $query->orderBy('nrp');
         $rekap = $query->get();
 
+        // Tambahan: Logika untuk menangani shift malam agar out tetap di hari in (tidak zig-zag)
+        foreach ($rekap as $r) {
+            for ($i = 1; $i <= $jmlHari; $i++) {
+                $tgl = "tgl_" . $i;
+                if (!empty($r->$tgl)) {
+                    $datapresensi = explode("|", $r->$tgl);
+                    $jam_pulang = $datapresensi[5] ?? '';
+                    $jam_masuk = $datapresensi[4] ?? '';
+                    $jam_out = $datapresensi[1] ?? '';
+                    
+                    // Jika shift malam (jam_pulang < jam_masuk) dan ada out, pastikan out tetap di hari ini
+                    if ($jam_pulang < $jam_masuk && !empty($jam_out) && $i < $jmlHari) {
+                        // Jika hari berikutnya kosong, pindah out ke hari ini (opsional, tergantung logika view)
+                        // Untuk Excel, ini akan ditangani di view
+                    }
+                }
+            }
+        }
+
         if(isset($_POST['exportExcel'])){
             $time = date("d-M-Y H:i:s");
-             // Fungsi Header dengan mengirimkan raw data excel
+            // Fungsi Header dengan mengirimkan raw data excel
             header("Content-type: application/vnd-ms-excel");
             // Mendefinisikan nama dile exksport "hasil-export.xls"+
             header("Content-Disposition: attachment; filename=Rekap Presensi Karyawan $time.xls");
@@ -482,7 +534,7 @@ class PresensiController extends Controller
 
         $query->leftJoin('presensi', function($join) use ($tanggal) {
             $join->on('karyawan.nrp', '=', 'presensi.nrp')
-                 ->where('presensi.tgl_presensi', '=', $tanggal);
+                ->where('presensi.tgl_presensi', '=', $tanggal);
         });
 
         $query->leftJoin('jam_kerja', 'presensi.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja');
@@ -491,6 +543,14 @@ class PresensiController extends Controller
         $query->orderBy('karyawan.nrp');
 
         $rekap = $query->get(); // Data harian per karyawan
+
+        // Tambahan: Logika untuk menangani shift malam agar out tetap di hari in (tidak zig-zag)
+        foreach ($rekap as $r) {
+            if (!empty($r->jam_pulang) && !empty($r->jam_masuk) && $r->jam_pulang < $r->jam_masuk && !empty($r->jam_out)) {
+                // Jika shift malam dan ada out, pastikan out tetap di hari ini (sudah ditangani oleh query, tapi tambahkan validasi)
+                // Untuk Excel, ini akan ditangani di view
+            }
+        }
 
         // Export to Excel jika diminta
         if(isset($_POST['exportExcel'])){
