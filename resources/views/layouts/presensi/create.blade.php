@@ -55,8 +55,8 @@
                     <div class="jam-digital-malasngoding">
                         <p id="jam"></p>
                         <p>{{ $jamKerja->nama_jam_kerja }}</p>
-                        <p>Mulai Jam In : {{ date('H:i', strtotime($jamKerja->awal_jam_masuk)) }}</p>
-                        <p>Akhir Jam Out : {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
+                        <p>Jam In : {{ date('H:i', strtotime($jamKerja->jam_masuk)) }}</p>
+                        <p>Jam Out : {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
                         <p></p>
                     </div>
                     {{-- Tombol Ganti Shift dipindahkan ke sini, di bawah jam --}}
@@ -100,7 +100,7 @@
                     <p class="text-sm text-gray-600 mt-2">Hari: {{ app('App\Http\Controllers\PresensiController')->getHari() }}, {{ app('App\Http\Controllers\PresensiController')->getTanggalSekarang() }}</p>
                     <div class="mt-4 text-left">
                         <p><strong>Nama Shift:</strong> {{ $jamKerja->nama_jam_kerja }}</p>
-                        <p><strong>Jam Masuk:</strong> {{ date('H:i', strtotime($jamKerja->awal_jam_masuk)) }}</p>
+                        <p><strong>Jam Masuk:</strong> {{ date('H:i', strtotime($jamKerja->jam_masuk)) }}</p>
                         <p><strong>Jam Pulang:</strong> {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
                         <p class="mt-4 text-gray-700">Shift pian sudah sesuai kah ? mun belum silakan ganti dulu shift nya</p>
                     </div>

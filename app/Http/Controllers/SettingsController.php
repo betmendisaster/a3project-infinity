@@ -48,7 +48,9 @@ class SettingsController extends Controller
         $awal_jam_masuk = $request->awal_jam_masuk;
         $jam_masuk = $request->jam_masuk;
         $akhir_jam_masuk = $request->akhir_jam_masuk;
+        $awal_jam_pulang = $request->awal_jam_pulang; // BARU
         $jam_pulang = $request->jam_pulang;
+        $akhir_jam_pulang = $request->akhir_jam_pulang; // BARU
 
         $data = [
             'kode_jam_kerja' => $kode_jam_kerja,
@@ -56,14 +58,15 @@ class SettingsController extends Controller
             'awal_jam_masuk' => $awal_jam_masuk,
             'jam_masuk' => $jam_masuk,
             'akhir_jam_masuk' => $akhir_jam_masuk,
-            'jam_pulang' => $jam_pulang
+            'awal_jam_pulang' => $awal_jam_pulang, // BARU
+            'jam_pulang' => $jam_pulang,
+            'akhir_jam_pulang' => $akhir_jam_pulang, // BARU
         ];
         try {
             DB::table('jam_kerja')->insert($data);
             return Redirect::back()->with(['success' => 'Data Berhasil di Simpan']);
         } catch (\Exception $e) {
             return Redirect::back()->with(['warning' => 'Data Gagal di Simpan']);
-            
         }
     }
 
@@ -79,21 +82,24 @@ class SettingsController extends Controller
         $awal_jam_masuk = $request->awal_jam_masuk;
         $jam_masuk = $request->jam_masuk;
         $akhir_jam_masuk = $request->akhir_jam_masuk;
+        $awal_jam_pulang = $request->awal_jam_pulang; // BARU
         $jam_pulang = $request->jam_pulang;
+        $akhir_jam_pulang = $request->akhir_jam_pulang; // BARU
 
         $data = [
             'nama_jam_kerja' => $nama_jam_kerja,
             'awal_jam_masuk' => $awal_jam_masuk,
             'jam_masuk' => $jam_masuk,
             'akhir_jam_masuk' => $akhir_jam_masuk,
-            'jam_pulang' => $jam_pulang
+            'awal_jam_pulang' => $awal_jam_pulang, // BARU
+            'jam_pulang' => $jam_pulang,
+            'akhir_jam_pulang' => $akhir_jam_pulang, // BARU
         ];
         try {
             DB::table('jam_kerja')->where('kode_jam_kerja', $kode_jam_kerja)->update($data);
             return Redirect::back()->with(['success' => 'Data Berhasil di Simpan']);
         } catch (\Exception $e) {
             return Redirect::back()->with(['warning' => 'Data Gagal di Simpan']);
-            
         }
     }
 

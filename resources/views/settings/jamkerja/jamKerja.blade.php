@@ -63,7 +63,9 @@
                                                 <th>Awal Jam In</th>
                                                 <th>Jam In</th>
                                                 <th>Akhir Jam In</th>
+                                                <th>Awal Jam Out</th>
                                                 <th>Jam Out</th>
+                                                <th>Akhir Jam Out</th>
                                                 <th>Aksi</th>
                                             </tr>
                                         </thead>
@@ -76,7 +78,9 @@
                                                     <td>{{ $d->awal_jam_masuk }}</td>
                                                     <td>{{ $d->jam_masuk }}</td>
                                                     <td>{{ $d->akhir_jam_masuk }}</td>
+                                                    <td>{{ $d->awal_jam_pulang }}</td>
                                                     <td>{{ $d->jam_pulang }}</td>
+                                                    <td>{{ $d->akhir_jam_pulang }}</td>
                                                     <td>
                                                         <div class="btn-group">
                                                             <a href="#" class="edit btn btn-info btn-sm"

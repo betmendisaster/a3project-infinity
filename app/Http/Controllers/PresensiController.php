@@ -76,10 +76,24 @@ class PresensiController extends Controller
         $today = date("Y-m-d");
         $namahari = $this->getHari();
         $nrp = Auth::guard('karyawan')->user()->nrp;
-        // cek bugar bos
-        $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $today)->count();
-        if($cekBugar == 0){
-            return redirect('/presensi/bugar-selamat');
+        
+        // PERUBAHAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
+        $cek = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->count();
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        
+        if ($cek == 0 && $cekKemarin > 0) {
+            // Shift malam: Sudah absen in hari kemarin, cek bugar untuk hari kemarin
+            $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->count();
+            if($cekBugar == 0){
+                return redirect('/presensi/bugar-selamat');
+            }
+        } else {
+            // Shift normal atau belum absen: Cek bugar untuk hari ini
+            $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $today)->count();
+            if($cekBugar == 0){
+                return redirect('/presensi/bugar-selamat');
+            }
         }
         
         $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
@@ -127,7 +141,6 @@ class PresensiController extends Controller
             return view('layouts.presensi.create', compact('cek','lok_site','jamKerja'));
         }   
     }
-
 
     public function store (Request $request){
         $nrp = Auth::guard('karyawan')->user()->nrp;
@@ -180,8 +193,11 @@ class PresensiController extends Controller
             echo "error|Maaf anda berada diluar radius absensi, jarak anda adalah ".$radius." Meter dari lokasi absensi|radius";
         }else {
             if($cek > 0){
-                if($jam < $jamKerja->jam_pulang){
-                    echo "error|Maaf Belum Waktunya Take Out Absen|out";
+                // PERUBAHAN: Tambahkan validasi awal dan akhir jam pulang
+                if($jam < $jamKerja->awal_jam_pulang){ // BARU: Belum waktunya absen out
+                    echo "error|Belum Waktunya Melakukan Absen Out|out";
+                } elseif($jam > $jamKerja->akhir_jam_pulang){ // BARU: Sudah terlambat absen out
+                    echo "error|Waktu Absen Out Sudah Habis|out";
                 } else {
                     $data_pulang= [
                         'jam_out' => $jam,
@@ -735,28 +751,34 @@ class PresensiController extends Controller
     return view('layouts.presensi.bugar.bugarSelamat');
     }
     
-    // Fungsi untuk menyimpan data bugar selamat
+        // Fungsi untuk menyimpan data bugar selamat
     public function storeBugarSelamat(Request $request) {
-    $nrp = Auth::guard('karyawan')->user()->nrp;
-    $today = date("Y-m-d");
+        $nrp = Auth::guard('karyawan')->user()->nrp;
+        $today = date("Y-m-d");
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
 
-    // Validasi input
-    $request->validate([
-        'jam_tidur' => 'required|integer|min:1|max:24',
-        'minum_obat' => 'required|in:ya,tidak',
-    ]);
+        // PERUBAHAN: Tentukan hari kerja untuk bugar selamat berdasarkan shift
+        $cekKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->count();
+        $tglBugar = $cekKemarin > 0 ? $kemarin : $today; // Jika shift malam (ada record kemarin jam_out null), gunakan hari kemarin; jika tidak, hari ini
 
-    // Cek apakah sudah isi untuk hari ini
-    $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $today)->count();
+        // Validasi input
+        $request->validate([
+            'jam_tidur' => 'required|integer|min:1|max:24',
+            'minum_obat' => 'required|in:ya,tidak',
+        ]);
 
-    if ($cek > 0) {
-        // Jika sudah isi, redirect ke presensi
-        return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk hari ini.']);
-    }
+        // PERUBAHAN: Cek apakah sudah isi untuk hari kerja tersebut (bukan hari kalender)
+        $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
+
+        if ($cek > 0) {
+            // Jika sudah isi, redirect ke presensi
+            return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.']);
+        }
+        
         // Simpan data
         $data = [
             'nrp' => $nrp,
-            'tgl_presensi' => $today,
+            'tgl_presensi' => $tglBugar, // PERUBAHAN: Gunakan hari kerja, bukan $today
             'jam_tidur' => $request->jam_tidur,
             'minum_obat' => $request->minum_obat,
             'created_at' => now(),

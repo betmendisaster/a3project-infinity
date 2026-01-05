@@ -27,6 +27,7 @@
         </table>
         <table class="tablePresensi">
             <tr>
+                <th>tanggal</th>
                 <th>NRP</th>
                 <th>Nama</th>
                 <th>Department</th>
@@ -40,6 +41,7 @@
             </tr>
             @foreach($rekap as $r)
             <tr>
+                <td>{{ date('d-m-Y', strtotime($tanggal)) }}</td>  <!-- Perbaikan: Gunakan $tanggal untuk semua baris agar kolom tanggal selalu terisi -->
                 <td>{{ $r->nrp }}</td>
                 <td>{{ $r->nama }}</td>
                 <td>{{ $r->kode_dept }}</td>
