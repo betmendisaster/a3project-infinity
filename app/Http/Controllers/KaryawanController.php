@@ -148,17 +148,31 @@ class KaryawanController extends Controller
     }
     
     public function delete($nrp){
-        // PERBAIKAN: Tambahkan penghapusan foto dari storage untuk menghindari penyimpanan berlebih
-        $karyawan = DB::table('karyawan')->where('nrp', $nrp)->first();
-        if ($karyawan && $karyawan->foto) {
-            Storage::delete("uploads/karyawan/fotoProfile/" . $karyawan->foto);
-        }
-        
-        $delete = DB::table('karyawan')->where('nrp', $nrp)->delete();
-        if($delete){
-            return Redirect::back()->with(['success' => 'Data Berhasil di Delete']);
-        } else {
-            return Redirect::back()->with(['warning' => 'Data Gagal di Delete']);
+        try {
+            // Cek apakah karyawan ada
+            $karyawan = DB::table('karyawan')->where('nrp', $nrp)->first();
+            if (!$karyawan) {
+                return Redirect::back()->with(['warning' => 'Karyawan tidak ditemukan']);
+            }
+
+            // Hapus record terkait di tabel bugar_selamat terlebih dahulu (untuk menghindari foreign key constraint)
+            DB::table('bugar_selamat')->where('nrp', $nrp)->delete();
+
+            // Hapus foto dari storage jika ada
+            if ($karyawan->foto) {
+                Storage::delete("uploads/karyawan/fotoProfile/" . $karyawan->foto);
+            }
+
+            // Hapus karyawan
+            $delete = DB::table('karyawan')->where('nrp', $nrp)->delete();
+            if ($delete) {
+                return Redirect::back()->with(['success' => 'Data Berhasil di Delete']);
+            } else {
+                return Redirect::back()->with(['warning' => 'Data Gagal di Delete']);
+            }
+        } catch (\Exception $e) {
+            // Tangani error dan tampilkan pesan
+            return Redirect::back()->with(['warning' => 'Data Gagal di Delete: ' . $e->getMessage()]);
         }
     }
 }
