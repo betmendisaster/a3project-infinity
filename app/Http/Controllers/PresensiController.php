@@ -110,28 +110,26 @@ class PresensiController extends Controller
                 ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
                 ->where('kode_dept',$kode_dept)->where('hari',$namahari)->first();
             }
-        
-        // Tambahan: Cek apakah ada record hari kemarin yang belum out (untuk shift malam)
-        if ($cek == 0) {
-            $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
-            $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
-            if ($cekKemarin > 0) {
-                $cek = 1; // Anggap sudah absen hari ini, karena out untuk hari kemarin belum selesai
-                // Opsional: Ambil jamKerja untuk hari kemarin jika diperlukan untuk validasi di view
-                $namahariKemarin = $this->getHariFromDate($kemarin);
-                $jamKerjaKemarin = DB::table('settings_jam_kerja')
-                    ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                    ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
-                if ($jamKerjaKemarin == null) {
-                    $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
-                        ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
-                        ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                        ->where('kode_dept',$kode_dept)->where('hari',$namahariKemarin)->first();
-                }
-                // Jika jamKerja hari kemarin ada, gunakan untuk view (misalnya, tampilkan jam_pulang hari kemarin)
-                if ($jamKerjaKemarin) {
-                    $jamKerja = $jamKerjaKemarin;
-                }
+        // Tambahkan ini setelah $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        if ($cekKemarin > 0) {
+            // Ambil jamKerja kemarin untuk validasi
+            $namahariKemarin = $this->getHariFromDate($kemarin);
+            $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+            if ($jamKerjaKemarin == null) {
+                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept',$kode_dept)->where('hari',$namahariKemarin)->first();
+            }
+            
+            // Jika shift malam (jam_pulang < jam_masuk) dan waktu sekarang > akhir_jam_pulang, anggap shift selesai tanpa update jam_out
+            if ($jamKerjaKemarin && $jamKerjaKemarin->jam_pulang < $jamKerjaKemarin->jam_masuk && $jam > $jamKerjaKemarin->akhir_jam_pulang) {
+                // Jangan update jam_out, biarkan null. Hanya set agar bisa absen in hari ini
+                $cekKemarin = 0;  // Anggap shift selesai, sehingga hari ini bisa absen in
+                // Opsional: Tambahkan flash message untuk user
+                session()->flash('warning', 'Shift kemarin dianggap selesai karena timeout. Jam out tidak tercatat.');
             }
         }
         

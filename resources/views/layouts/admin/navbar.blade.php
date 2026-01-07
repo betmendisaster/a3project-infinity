@@ -72,7 +72,10 @@
                 </a>
                 <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
                     {{-- <a href="./settings.html" class="dropdown-item">Settings</a> --}}
-                    <a href="/proseslogoutadmin" class="dropdown-item">Logout</a>
+                    <form action="/proseslogoutadmin" method="POST" style="display: inline;">
+                        @csrf
+                        <button type="submit" class="dropdown-item">Logout</button>
+                    </form>
                 </div>
             </div>
         </div>

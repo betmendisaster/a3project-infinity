@@ -15,26 +15,22 @@ use GuzzleHttp\Middleware;
 use Illuminate\Support\Facades\Route;
 
 // USER KARYAWAN
-route::middleware(['guest:karyawan'])->group(function () {
-    Route::get('/', function () {
-        return view('auth.login');
-    })->name('login');
-    route::post('/proseslogin', [AuthController::class,'proseslogin']); 
-    
+Route::middleware(['guest:karyawan'])->group(function () {
+    // Ubah ke method di controller dengan header no-cache
+    Route::get('/', [AuthController::class, 'login'])->name('login');
+    Route::post('/proseslogin', [AuthController::class, 'proseslogin']);
 });
 
 // USER ADMIN
-route::middleware(['guest:user'])->group(function () {
-    Route::get('/panel', function () {
-        return view('auth.loginadmin');
-    })->name('loginadmin');
-    route::post('/prosesloginadmin', [AuthController::class,'prosesloginadmin']);
-    
+Route::middleware(['guest:user'])->group(function () {
+    // Ubah ke method di controller dengan header no-cache
+    Route::get('/panel', [AuthController::class, 'loginadmin'])->name('loginadmin');
+    Route::post('/prosesloginadmin', [AuthController::class, 'prosesloginadmin']);
 });
 
-route::middleware(['auth:karyawan'])->group(function () {
-    route::get('/dashboard', [DashboardController::class, 'index']);
-    route::get('/proseslogout', [AuthController::class,'proseslogout']);
+Route::middleware(['auth:karyawan'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::post('/proseslogout', [AuthController::class, 'proseslogout']);
 
     //Presensi
     Route::get('/presensi/create', [PresensiController::class,'create']);
@@ -83,8 +79,8 @@ route::middleware(['auth:karyawan'])->group(function () {
 
 });
 
-Route::middleware(['auth:user'])->group(function(){
-    Route::get('/proseslogoutadmin', [AuthController::class,'proseslogoutadmin']);
+Route::middleware(['auth:user'])->group(function() {
+    Route::post('/proseslogoutadmin', [AuthController::class, 'proseslogoutadmin']);
     Route::get('/panel/dashboardadmin',[DashboardController::class,'dashboardAdmin']);
 
     // Data master Karyawan

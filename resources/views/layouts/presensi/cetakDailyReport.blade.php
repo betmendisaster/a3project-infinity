@@ -46,14 +46,14 @@
                 <td>{{ $r->nama }}</td>
                 <td>{{ $r->kode_dept }}</td>
                 <td>{{ $r->jabatan }}</td>
-                <td>{{ $r->jam_in ?? 'NA' }}</td>
+                <td>{{ $r->jam_in ?? 'Tidak Absen In' }}</td>
                 <?php
                     // Untuk shift malam, pastikan out ditampilkan meskipun dilakukan di hari berikutnya
                     $jam_out_display = $r->jam_out ?? 'NA';
                     // Jika shift malam (jam_pulang < jam_masuk), tambahkan indikator jika perlu
                     $isShiftMalam = (!empty($r->jam_pulang) && !empty($r->jam_masuk) && $r->jam_pulang < $r->jam_masuk);
                 ?>
-                <td>{{ $jam_out_display }}</td>
+                <td>{{ $jam_out_display ?? 'Tidak Absen Out' }}</td>
                 <td>{{ $r->status ?? 'NA' }}</td>
                 <td>{{ $r->nama_jam_kerja ?? 'NA' }}</td>
                 <td>{{ $r->kode_izin ?? 'NA' }}</td>
