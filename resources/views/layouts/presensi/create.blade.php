@@ -60,7 +60,7 @@
                         <p></p>
                     </div>
                     {{-- Tombol Ganti Shift dipindahkan ke sini, di bawah jam --}}
-                    @if($cek == 0)
+                    @if(!$presensiHariIni)  {{-- PERUBAHAN: Ganti dari @if($cek == 0) --}}
                         <button id="btnKonfirmasiShift" class="text-xs bg-red-500 text-white rounded px-2 py-1 mt-2 cursor-pointer hover:bg-red-700 transition duration-300 shadow-sm flex items-center gap-1">
                             <i class="fa-solid fa-arrows-alt-h"></i> Konfirmasi Shift
                         </button>
@@ -82,11 +82,17 @@
             <div class="bg-white text-gray-800 rounded-b-lg p-2 flex items-center justify-center w-full mx-1 shadow-md mt-3">
                 <input type="text" id="lokasi">
             </div>
-            {{-- button take absen --}}
+
+           {{-- button take absen --}}
             <div class="bg-slate-300 text-gray-800 rounded-b-lg p-1 flex items-center justify-center w-full mx-1 shadow-md">
-                @if ($cek > 0)
+                @if ($presensiHariIni && !is_null($presensiHariIni->jam_out))
+                    {{-- Jika sudah absen out, tampilkan tombol yang bisa diklik tapi muncul popup --}}
+                    <button class="bg-gray-400 text-gray-600 rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer" id="takeabsen"><i class="fa-solid fa-camera"></i>Out</button>
+                @elseif ($presensiHariIni)
+                    {{-- Jika sudah absen in tapi belum out, tampilkan tombol out --}}
                     <button class="bg-white text-black rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-red-800 transition duration-300 shadow-md hover:text-white" id="takeabsen"><i class="fa-solid fa-camera"></i>Out</button>
                 @else
+                    {{-- Jika belum absen in, tampilkan tombol in --}}
                     <button class="bg-white text-black rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-green-800 transition duration-300 shadow-md hover:text-white" id="takeabsen"><i class="fa-solid fa-camera"></i>In</button>
                 @endif
             </div>
@@ -210,7 +216,7 @@
             var long_site = lok[1];
             var radius = {{ $lok_site->radius_cabang }};
 
-            googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs/m&x={x}&y={y}&z={z}', {
                 maxZoom: 20,
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
             }).addTo(map);
@@ -227,6 +233,18 @@
 
         // take absen ajax
         $("#takeabsen").click(function(e) {
+            // PERUBAHAN: Cek jika sudah absen out hari ini, tampilkan popup dan hentikan
+            if (@json($presensiHariIni && !is_null($presensiHariIni->jam_out))) {
+                Swal.fire({
+                    title: 'Sudah Absen!',
+                    text: 'Kamu sudah berhasil absen hari ini.',
+                    icon: 'info',
+                    confirmButtonText: 'OK'
+                });
+                return; // Hentikan eksekusi, jangan lanjutkan absen
+            }
+
+            // Lanjutkan logika absen seperti biasa
             Webcam.snap(function(uri) {
                 image = uri;
             });
@@ -336,7 +354,7 @@
 
     <script>
         // Modal konfirmasi shift muncul otomatis jika belum absen in hari ini
-        @if($cek == 0)
+        @if(!$presensiHariIni)  {{-- PERUBAHAN: Ganti dari @if($cek == 0) --}}
             window.onload = function() {
                 jam();
                 $("#modalKonfirmasiShift").removeClass("hidden");

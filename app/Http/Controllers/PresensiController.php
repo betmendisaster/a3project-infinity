@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redirect;
+use Intervention\Image\Facades\Image;
 
 class PresensiController extends Controller
 {
@@ -70,34 +71,57 @@ class PresensiController extends Controller
         default: return "Tidak di Ketahui";
         }
     }
-   public function create(){
-    
-        // validasi absen untuk absen pulang
+
+    private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
+        // Validasi input: Pastikan format waktu benar
+        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
+            \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
+            return null; // Return null jika format salah
+        }
+
+        try {
+            // Konversi akhir_jam_pulang ke timestamp
+            $timestampAkhir = strtotime($akhirJamPulang);
+            if ($timestampAkhir === false) {
+                \Log::error("Gagal mengkonversi akhirJamPulang ke timestamp: $akhirJamPulang");
+                return null;
+            }
+
+            // Kurangi 2 jam
+            $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
+            if ($timestampTimeout === false) {
+                \Log::error("Gagal menghitung timeout untuk akhirJamPulang: $akhirJamPulang");
+                return null;
+            }
+
+            // Konversi kembali ke format "H:i:s"
+            $timeoutTime = date("H:i:s", $timestampTimeout);
+
+            // Logging untuk debug (opsional, hapus di production)
+            \Log::info("Timeout calculated: akhirJamPulang=$akhirJamPulang, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime");
+
+            return $timeoutTime;
+        } catch (\Exception $e) {
+            // Tangani exception jika ada (misal error strtotime)
+            \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function create(){
         $today = date("Y-m-d");
         $namahari = $this->getHari();
         $nrp = Auth::guard('karyawan')->user()->nrp;
         
-        // PERUBAHAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
-        $cek = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->count();
-        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
-        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
+        // Ubah: Ambil data presensi lengkap, bukan hanya count
+        $presensiHariIni = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->first();
         
-        if ($cek == 0 && $cekKemarin > 0) {
-            // Shift malam: Sudah absen in hari kemarin, cek bugar untuk hari kemarin
-            $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->count();
-            if($cekBugar == 0){
-                return redirect('/presensi/bugar-selamat');
-            }
-        } else {
-            // Shift normal atau belum absen: Cek bugar untuk hari ini
-            $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $today)->count();
-            if($cekBugar == 0){
-                return redirect('/presensi/bugar-selamat');
-            }
+        // Jika sudah ada jam_out, redirect dengan pesan (shift sudah selesai)
+        if ($presensiHariIni && !is_null($presensiHariIni->jam_out)) {
+            return redirect('/dashboard')->with(['warning' => 'Shift Anda hari ini sudah selesai. Tidak perlu absen out lagi.']);
         }
         
-        $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
-        $cek = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->count();
         $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
         $lok_site = DB::table('cabang')->where('kode_cabang',$kode_cabang)->first();
         $jamKerja = DB::table('settings_jam_kerja')
@@ -109,10 +133,17 @@ class PresensiController extends Controller
                 ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
                 ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
                 ->where('kode_dept',$kode_dept)->where('hari',$namahari)->first();
-            }
-        // Tambahkan ini setelah $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        }
+        
+        // PERUBAHAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        
+        $jam = date("H:i:s");
+        $isTimeout = false;
+        $tglBugar = $today; // Default: hari ini
+        
         if ($cekKemarin > 0) {
-            // Ambil jamKerja kemarin untuk validasi
             $namahariKemarin = $this->getHariFromDate($kemarin);
             $jamKerjaKemarin = DB::table('settings_jam_kerja')
                 ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
@@ -121,22 +152,39 @@ class PresensiController extends Controller
                 $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
                     ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
                     ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                    ->where('kode_dept',$kode_dept)->where('hari',$namahariKemarin)->first();
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
             }
             
-            // Jika shift malam (jam_pulang < jam_masuk) dan waktu sekarang > akhir_jam_pulang, anggap shift selesai tanpa update jam_out
-            if ($jamKerjaKemarin && $jamKerjaKemarin->jam_pulang < $jamKerjaKemarin->jam_masuk && $jam > $jamKerjaKemarin->akhir_jam_pulang) {
-                // Jangan update jam_out, biarkan null. Hanya set agar bisa absen in hari ini
-                $cekKemarin = 0;  // Anggap shift selesai, sehingga hari ini bisa absen in
-                // Opsional: Tambahkan flash message untuk user
-                session()->flash('warning', 'Shift kemarin dianggap selesai karena timeout. Jam out tidak tercatat.');
+            if ($jamKerjaKemarin) {
+                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+                $jamMasuk = $jamKerjaKemarin->jam_masuk;
+                $jamPulang = $jamKerjaKemarin->jam_pulang;
+                $isShiftMalam = ($jamPulang < $jamMasuk);
+                
+                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
+                
+                if ($isShiftMalam) {
+                    $isTimeout = ($jam > $timeoutTime);
+                } else {
+                    $isTimeout = true; // Hari kemarin sudah lewat
+                }
+                
+                if (!$isTimeout) {
+                    $tglBugar = $kemarin; // Gunakan kemarin jika belum timeout
+                }
             }
+        }
+        
+        $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
+        if ($cekBugar == 0) {
+            return redirect('/presensi/bugar-selamat');
         }
         
         if($jamKerja == null){
             return view ('layouts.presensi.notifJadwal');                
         } else {
-            return view('layouts.presensi.create', compact('cek','lok_site','jamKerja'));
+            // Pass $presensiHariIni ke view untuk pengecekan di frontend
+            return view('layouts.presensi.create', compact('presensiHariIni','lok_site','jamKerja'));
         }   
     }
 
@@ -171,45 +219,46 @@ class PresensiController extends Controller
                 ->where('kode_dept',$kode_dept)->where('hari',$namahari)->first();
             }
 
-        $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->count();
-        if($cek >0){
-            $ket = "out";
-        }else {
-            $ket = "in";
-        }
+        // Ubah: Ambil data presensi lengkap
+        $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->first();
+        
         $image = $request->image;
         // mengubah folder default ada di config/filesystems.php
         $folderPath = "uploads/absensi/";
-        $formatName = $nrp . "-" . $tgl_presensi ."-". $ket;
+        $formatName = $nrp . "-" . $tgl_presensi ."-". ($cek ? "out" : "in");
         $image_parts = explode(";base64" ,$image);
         $image_base64 = base64_decode($image_parts[1]);
         $fileName = $formatName . ".png";
         $file = $folderPath . $fileName;
-       
-        $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->count();
+    
         if($radius > $lok_site->radius_cabang){
             echo "error|Maaf anda berada diluar radius absensi, jarak anda adalah ".$radius." Meter dari lokasi absensi|radius";
         }else {
-            if($cek > 0){
-                // PERUBAHAN: Tambahkan validasi awal dan akhir jam pulang
-                if($jam < $jamKerja->awal_jam_pulang){ // BARU: Belum waktunya absen out
-                    echo "error|Belum Waktunya Melakukan Absen Out|out";
-                } elseif($jam > $jamKerja->akhir_jam_pulang){ // BARU: Sudah terlambat absen out
-                    echo "error|Waktu Absen Out Sudah Habis|out";
+            if($cek){
+                // Tambahan: Cek apakah jam_out sudah ada
+                if (!is_null($cek->jam_out)) {
+                    echo "error|Anda sudah absen out hari ini. Shift sudah selesai.|out";
                 } else {
-                    $data_pulang= [
-                        'jam_out' => $jam,
-                        'foto_out' => $fileName,
-                        'lokasi_out' => $lokasi
-                    ];
-                    $update = DB::table('presensi')->where('tgl_presensi',$tgl_presensi)->where('nrp',$nrp)->update($data_pulang); 
-                    if ($update) {
-                        echo "success|Terimakasih, Selamat Beristirahat, Hati - Hati di Jalan~|out";
-                        Storage::put($file, $image_base64);
-                    }else {
-                        echo "error|Maaf absen gagal, silahkan hubungi tim IT|out";
-                    }
-                }              
+                    // PERUBAHAN: Tambahkan validasi awal dan akhir jam pulang
+                    if($jam < $jamKerja->awal_jam_pulang){ // BARU: Belum waktunya absen out
+                        echo "error|Belum Waktunya Melakukan Absen Out|out";
+                    } elseif($jam > $jamKerja->akhir_jam_pulang){ // BARU: Sudah terlambat absen out
+                        echo "error|Waktu Absen Out Sudah Habis|out";
+                    } else {
+                        $data_pulang= [
+                            'jam_out' => $jam,
+                            'foto_out' => $fileName,
+                            'lokasi_out' => $lokasi
+                        ];
+                        $update = DB::table('presensi')->where('tgl_presensi',$tgl_presensi)->where('nrp',$nrp)->update($data_pulang); 
+                        if ($update) {
+                            echo "success|Terimakasih, Selamat Beristirahat, Hati - Hati di Jalan~|out";
+                            Storage::put($file, $image_base64);
+                        }else {
+                            echo "error|Maaf absen gagal, silahkan hubungi tim IT|out";
+                        }
+                    }              
+                }
             } else {
                 if ($jam < $jamKerja->awal_jam_masuk){
                     echo "error|Belum Waktunya Melakukan Presensi|in";
@@ -232,10 +281,9 @@ class PresensiController extends Controller
                     }else {
                         echo "error|Maaf absen gagal, silahkan hubungi tim IT|in";
                     }
-                } 
+                }
             }
         }
-    
     }
     // untuk menghitung jarak titik koordinat absensi
     function distance($lat1, $lon1, $lat2, $lon2)
@@ -735,48 +783,120 @@ class PresensiController extends Controller
     }
 
     public function bugarSelamat() {
-    $nrp = Auth::guard('karyawan')->user()->nrp;
-    $today = date("Y-m-d");
-    
-    // Cek apakah sudah isi untuk hari ini
-    $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $today)->count();
-    
-    if ($cek > 0) {
-        // Jika sudah isi, redirect ke presensi
-        return redirect('/presensi/create');
+        $nrp = Auth::guard('karyawan')->user()->nrp;
+        $today = date("Y-m-d");
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+        
+        $cekKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->count();
+        $jam = date("H:i:s");
+        $isTimeout = false;
+        $tglBugar = $today;
+        
+        if ($cekKemarin > 0) {
+            $namahariKemarin = $this->getHariFromDate($kemarin);
+            $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+            if ($jamKerjaKemarin == null) {
+                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+            }
+            
+            if ($jamKerjaKemarin) {
+                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+                $jamMasuk = $jamKerjaKemarin->jam_masuk;
+                $jamPulang = $jamKerjaKemarin->jam_pulang;
+                $isShiftMalam = ($jamPulang < $jamMasuk);
+                
+                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
+                
+                if ($isShiftMalam) {
+                    $isTimeout = ($jam > $timeoutTime);
+                } else {
+                    $isTimeout = true; // Hari kemarin sudah lewat
+                }
+                
+                if (!$isTimeout) {
+                    $tglBugar = $kemarin;
+                }
+            }
+        }
+        
+        $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
+        if ($cek > 0) {
+            return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.']);
+        }
+        
+        return view('layouts.presensi.bugar.bugarSelamat');
     }
     
-    return view('layouts.presensi.bugar.bugarSelamat');
-    }
-    
-        // Fungsi untuk menyimpan data bugar selamat
+    // Fungsi untuk menyimpan data bugar selamat
     public function storeBugarSelamat(Request $request) {
         $nrp = Auth::guard('karyawan')->user()->nrp;
         $today = date("Y-m-d");
         $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
 
-        // PERUBAHAN: Tentukan hari kerja untuk bugar selamat berdasarkan shift
         $cekKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->count();
-        $tglBugar = $cekKemarin > 0 ? $kemarin : $today; // Jika shift malam (ada record kemarin jam_out null), gunakan hari kemarin; jika tidak, hari ini
-
-        // Validasi input
+        $jam = date("H:i:s");
+        $isTimeout = false;
+        $tglBugar = $today;
+        
+        if ($cekKemarin > 0) {
+            $namahariKemarin = $this->getHariFromDate($kemarin);
+            $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+            if ($jamKerjaKemarin == null) {
+                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+            }
+            
+            if ($jamKerjaKemarin) {
+                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+                $jamMasuk = $jamKerjaKemarin->jam_masuk;
+                $jamPulang = $jamKerjaKemarin->jam_pulang;
+                $isShiftMalam = ($jamPulang < $jamMasuk);
+                
+                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
+                
+                if ($isShiftMalam) {
+                    $isTimeout = ($jam > $timeoutTime);
+                } else {
+                    $isTimeout = true;
+                }
+                
+                if (!$isTimeout) {
+                    $tglBugar = $kemarin;
+                }
+            }
+        }
+        
+        // Validasi input dengan pesan custom
         $request->validate([
             'jam_tidur' => 'required|integer|min:1|max:24',
             'minum_obat' => 'required|in:ya,tidak',
+        ], [
+            'jam_tidur.required' => 'Jam tidur wajib diisi.',
+            'jam_tidur.integer' => 'Jam tidur harus berupa angka.',
+            'jam_tidur.min' => 'Jam tidur minimal 1 jam.',
+            'jam_tidur.max' => 'Jam tidur maksimal 24 jam.',
+            'minum_obat.required' => 'Pilihan minum obat wajib dipilih.',
+            'minum_obat.in' => 'Pilihan minum obat tidak valid.',
         ]);
-
-        // PERUBAHAN: Cek apakah sudah isi untuk hari kerja tersebut (bukan hari kalender)
+        
         $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
-
         if ($cek > 0) {
-            // Jika sudah isi, redirect ke presensi
-            return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.']);
+            \Log::info("Bugar Selamat sudah diisi untuk nrp: $nrp, tgl: $tglBugar");
+            return response()->json(['error' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.'], 400);
         }
         
-        // Simpan data
         $data = [
             'nrp' => $nrp,
-            'tgl_presensi' => $tglBugar, // PERUBAHAN: Gunakan hari kerja, bukan $today
+            'tgl_presensi' => $tglBugar,
             'jam_tidur' => $request->jam_tidur,
             'minum_obat' => $request->minum_obat,
             'created_at' => now(),
@@ -786,13 +906,14 @@ class PresensiController extends Controller
         try {
             $simpan = DB::table('bugar_selamat')->insert($data);
             if ($simpan) {
+                \Log::info("Bugar Selamat berhasil disimpan untuk nrp: $nrp, tgl: $tglBugar");
                 return response()->json(['success' => 'Data Bugar Selamat berhasil disimpan.']);
             } else {
+                \Log::error("Gagal menyimpan Bugar Selamat untuk nrp: $nrp, tgl: $tglBugar - Insert gagal");
                 return response()->json(['error' => 'Gagal menyimpan data Bugar Selamat. Silakan coba lagi.'], 500);
             }
         } catch (\Exception $e) {
-            // Log error untuk debugging
-            \Log::error('Error menyimpan data Bugar Selamat: ' . $e->getMessage());
+            \Log::error("Exception di storeBugarSelamat: " . $e->getMessage());
             return response()->json(['error' => 'Terjadi kesalahan sistem. Silakan coba lagi.'], 500);
         }
     }

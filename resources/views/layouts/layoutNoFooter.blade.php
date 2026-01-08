@@ -19,6 +19,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/@themesberg/flowbite@1.2.0/dist/flowbite.min.css" />
     <title>A3-app</title>
+        <!-- Tailwind CSS CDN (jika belum ada) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- jQuery CDN (jika belum ada, tambahkan di atas Swal) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- SweetAlert CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     {{-- Loader --}}
     <style>

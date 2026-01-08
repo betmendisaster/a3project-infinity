@@ -74,11 +74,9 @@
     <!-- Audio Elements untuk Suara -->
     <audio id="success-sound">
         <source src="{{ asset('assets/sound/in.wav') }}" type="audio/mpeg">
-        <!-- Ganti dengan file suara sukses Anda, atau gunakan suara default -->
     </audio>
     <audio id="error-sound">
         <source src="{{ asset('assets/sound/out.wav') }}" type="audio/mpeg">
-        <!-- Ganti dengan file suara error Anda -->
     </audio>
 @endsection
 
@@ -89,28 +87,33 @@
             $('#bugarForm').on('submit', function(e) {
                 e.preventDefault(); // Mencegah reload halaman
 
-                var formData = new FormData(this);
-
                 $.ajax({
                     type: 'POST',
                     url: '/presensi/store-bugar-selamat',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
+                    data: $('#bugarForm').serialize(), // Gunakan serialize untuk data form sederhana
                     success: function(response) {
-                        // Jika sukses, tampilkan pesan dan mainkan suara
-                        $('#alert-container').html('<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 alert-message">' + response.success + '</div>');
-                        $('#success-sound')[0].play(); // Mainkan suara sukses
-                        // Redirect setelah 3 detik
-                        setTimeout(function() {
-                            window.location.href = '/presensi/create';
-                        }, 3000);
+                        if (response && response.success) {
+                            $('#alert-container').html('<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 alert-message">' + response.success + '</div>');
+                            $('#success-sound')[0].play();
+                            setTimeout(function() {
+                                window.location.href = '/presensi/create';
+                            }, 3000);
+                        } else {
+                            $('#alert-container').html('<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 alert-message">Terjadi kesalahan: Response tidak valid. Silakan coba lagi.</div>');
+                            $('#error-sound')[0].play();
+                        }
                     },
                     error: function(xhr) {
-                        // Jika error, tampilkan pesan dan mainkan suara
-                        var errorMessage = xhr.responseJSON ? xhr.responseJSON.error : 'Terjadi kesalahan. Silakan coba lagi.';
+                        var errorMessage = 'Terjadi kesalahan. Silakan coba lagi.';
+                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                            errorMessage = xhr.responseJSON.error;
+                        } else if (xhr.status === 422) {
+                            errorMessage = 'Input tidak valid. Periksa kembali data Anda.';
+                        } else if (xhr.status === 500) {
+                            errorMessage = 'Kesalahan server. Silakan hubungi admin.';
+                        }
                         $('#alert-container').html('<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 alert-message">' + errorMessage + '</div>');
-                        $('#error-sound')[0].play(); // Mainkan suara error
+                        $('#error-sound')[0].play();
                     }
                 });
             });

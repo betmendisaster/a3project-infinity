@@ -15,18 +15,16 @@
                 @php
                     $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_in);
                 @endphp
-                <img src="{{ url($path) }}" alt="" class="w-auto h-auto" height="400">
+                <img src="{{ url($path) }}" alt="Foto Absen Masuk" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;">
             @else
-                <img alt="A placeholder image with dimensions 600x400 pixels, showing a simple gray background with the text '600x400' in the center"
-                    class="w-auto h-auto" height="400" src="{{ asset('assets/img/loader.gif') }}" width="600" />
+                <img alt="Placeholder: Tidak ada foto absen masuk" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;" src="{{ asset('assets/img/loader.gif') }}" />
             @endif
         </div>
     </div>
 </div>
 
 <!-- Modal Out -->
-<div class="fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center" id="imageModalOut"
-    style="display: none;">
+<div class="fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center" id="imageModalOut" style="display: none;">
     <div class="bg-white rounded-lg overflow-hidden shadow-lg max-w-md w-full mx-auto mt-20">
         <div class="flex justify-between items-center p-4 border-b">
             <h3 class="text-lg font-semibold">
@@ -42,10 +40,9 @@
                 @php
                     $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_out);
                 @endphp
-                <img src="{{ url($path) }}" alt="" class="w-full h-auto" height="400">
+                <img src="{{ url($path) }}" alt="Foto Absen Pulang" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;">
             @else
-                <img alt="A placeholder image with dimensions 600x400 pixels, showing a simple gray background with the text '600x400' in the center"
-                    class="w-full h-auto" height="400" src="{{ asset('assets/img/loader.gif') }}" width="600" />
+                <img alt="Placeholder: Tidak ada foto absen pulang" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;" src="{{ asset('assets/img/loader.gif') }}" />
             @endif
         </div>
     </div>

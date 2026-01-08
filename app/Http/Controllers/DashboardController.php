@@ -6,9 +6,66 @@ use App\Models\Karyawan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+
 class DashboardController extends Controller
 {
- 
+    /**
+     * Menghitung waktu timeout berdasarkan akhir_jam_pulang dikurangi 2 jam.
+     * Timeout digunakan untuk menentukan kapan shift dianggap selesai tanpa jam_out,
+     * sehingga bugar selamat beralih ke hari ini lebih awal.
+     *
+     * @param string $akhirJamPulang Waktu akhir jam pulang dalam format "H:i:s" (misal "05:00:00").
+     * @param bool $isShiftMalam True jika shift malam (jam_pulang < jam_masuk), false jika normal.
+     * @return string|null Waktu timeout dalam format "H:i:s" (misal "03:00:00"), atau null jika error.
+     */
+    private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
+        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
+            \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
+            return null;
+        }
+
+        try {
+            $timestampAkhir = strtotime($akhirJamPulang);
+            if ($timestampAkhir === false) {
+                \Log::error("Gagal mengkonversi akhirJamPulang ke timestamp: $akhirJamPulang");
+                return null;
+            }
+
+            $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
+            if ($timestampTimeout === false) {
+                \Log::error("Gagal menghitung timeout untuk akhirJamPulang: $akhirJamPulang");
+                return null;
+            }
+
+            $timeoutTime = date("H:i:s", $timestampTimeout);
+            \Log::info("Timeout calculated: akhirJamPulang=$akhirJamPulang, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime");
+            return $timeoutTime;
+        } catch (\Exception $e) {
+            \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Mengembalikan nama hari dalam bahasa Indonesia berdasarkan string tanggal.
+     *
+     * @param string $dateString Tanggal dalam format "Y-m-d".
+     * @return string Nama hari (misal "Senin").
+     */
+    private function getHariFromDate($dateString) {
+        $day = date("D", strtotime($dateString));
+        switch ($day) {
+            case 'Sun': return "Minggu";
+            case 'Mon': return "Senin";
+            case 'Tue': return "Selasa";
+            case 'Wed': return "Rabu";
+            case 'Thu': return "Kamis";
+            case 'Fri': return "Jumat";
+            case 'Sat': return "Sabtu";
+            default: return "Tidak di Ketahui";
+        }
+    }
+
     public function index()
     {  
         $hariIni = date("Y-m-d");
@@ -17,17 +74,49 @@ class DashboardController extends Controller
         $jam = date("H:i:s"); // 16:20:25
         $nrp = Auth::guard('karyawan')->user()->nrp;
         
-        // PERUBAHAN: Ambil presensi hari ini terlebih dahulu
-        $presensiHariIni = DB::table('presensi')->where('nrp',$nrp)->where('tgl_presensi',$hariIni)->first();
+        // PERUBAHAN: Hitung hari kerja aktif untuk presensi (sama seperti di PresensiController::create())
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($hariIni)));
+        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
         
-        // PERUBAHAN: Jika belum ada record hari ini, cek shift malam (record hari kemarin dengan jam_out null)
-        if (!$presensiHariIni) {
-            $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($hariIni)));
-            $presensiKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->first();
-            if ($presensiKemarin) {
-                $presensiHariIni = $presensiKemarin; // Gunakan record kemarin sebagai "hari ini" untuk shift malam
+        $isTimeout = false;
+        $activePresensiDate = $hariIni; // Default: hari ini
+        
+        if ($cekKemarin > 0) {
+            $namahariKemarin = $this->getHariFromDate($kemarin);
+            $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+            if ($jamKerjaKemarin == null) {
+                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+            }
+            
+            if ($jamKerjaKemarin) {
+                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+                $jamMasuk = $jamKerjaKemarin->jam_masuk;
+                $jamPulang = $jamKerjaKemarin->jam_pulang;
+                $isShiftMalam = ($jamPulang < $jamMasuk);
+                
+                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
+                
+                if ($timeoutTime !== null) {
+                    if ($isShiftMalam) {
+                        $isTimeout = ($jam > $timeoutTime);
+                    } else {
+                        $isTimeout = true; // Hari kemarin sudah lewat
+                    }
+                }
+                
+                if (!$isTimeout) {
+                    $activePresensiDate = $kemarin; // Gunakan kemarin jika belum timeout
+                }
             }
         }
+        
+        // PERUBAHAN: Ambil presensi berdasarkan hari kerja aktif
+        $presensiHariIni = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $activePresensiDate)->first();
         
         $historiBulanIni = DB::table('presensi')
             ->select('presensi.*','keterangan','jam_kerja.*','doc_cis','nama_cuti')
