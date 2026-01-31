@@ -66,6 +66,18 @@
         <div class="loader-text">Loading...</div>
     </div>
 
+    @php
+        /**
+         * Default: absen BELUM selesai
+         * Akan true hanya jika halaman mengirim $presensiHariIni
+         */
+        $shiftSelesai = false;
+
+        if (isset($presensiHariIni) && $presensiHariIni) {
+            $shiftSelesai = !empty($presensiHariIni->jam_in)
+                && !empty($presensiHariIni->jam_out);
+        }
+    @endphp
 
     @include('layouts.nav.navUser')
 

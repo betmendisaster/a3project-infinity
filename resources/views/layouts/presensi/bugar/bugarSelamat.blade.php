@@ -42,9 +42,17 @@
                     <form id="bugarForm" action="/presensi/store-bugar-selamat" method="POST" class="space-y-4">
                         @csrf
                         <div>
-                            <label for="jam_tidur" class="block text-sm font-medium text-gray-700">Berapa jam tidur Anda semalam? (1-24 jam)</label>
-                            <input type="number" name="jam_tidur" id="jam_tidur" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500" min="1" max="24" required>
-                        </div>
+                            <label for="jam_tidur" class="block text-sm font-medium text-gray-700">Berapa jam tidur Anda semalam?</label>
+                            <select name="jam_tidur" id="jam_tidur"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm
+                                focus:ring-teal-500 focus:border-teal-500"
+                            required>
+                            <option value="">-- Pilih Jam Tidur --</option>
+                            @for ($i = 1; $i <= 24; $i++)
+                                <option value="{{ $i }}">{{ $i }} Jam</option>
+                            @endfor
+                        </select>
+                    </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Apakah Anda sedang minum obat?</label>

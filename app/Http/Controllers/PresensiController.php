@@ -313,47 +313,87 @@ class PresensiController extends Controller
     // $image_base64 = base64_decode($image_parts[1]);
     // $fileName = $formatName . ".png";
     // $file = $folderPath . $fileName;
+
     public function updateProfile(Request $request){
         $nrp = Auth::guard('karyawan')->user()->nrp;
         $nama = $request->nama;
         $telp = $request->telp;
-        $foto = $request->foto;
-        $password = Hash::make($request->password);
+        $password = $request->password;
         $karyawan = DB::table('karyawan')->where('nrp', $nrp)->first();
-        if ($request->hasFile('foto')){
-            $foto = $nrp .".". $request->file('foto')->getClientOriginalExtension();
-        } else {
-            $foto = $karyawan->foto;
+
+        // Validasi input
+        $request->validate([
+            'nama' => 'required|string|max:255',
+            'telp' => 'required|string|max:15',
+            'password' => 'nullable|string|min:6',
+            'foto_cropped' => 'nullable|string', // Base64 string
+            'foto' => 'nullable|image|mimes:jpeg,png,jpg|max:10240', // Max 10MB (tingkatkan dari 5MB)
+        ]);
+
+        // Tangani foto
+        $folderPath = "uploads/karyawan/fotoProfile/";
+        $foto = $karyawan->foto; // Default: foto lama
+
+        try {
+            if ($request->foto_cropped) {
+                // Decode base64 (dari Cropper.js)
+                $imageData = $request->foto_cropped;
+                if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $matches)) {
+                    $imageData = substr($imageData, strpos($imageData, ',') + 1);
+                    $imageData = str_replace(' ', '+', $imageData);
+                    $decodedImage = base64_decode($imageData);
+
+                    if ($decodedImage === false) {
+                        return Redirect::back()->with(['error' => 'Foto cropped tidak valid.']);
+                    }
+
+                    // Hapus foto lama jika ada
+                    if ($karyawan->foto && Storage::exists($folderPath . $karyawan->foto)) {
+                        Storage::delete($folderPath . $karyawan->foto);
+                    }
+
+                    // Simpan sebagai JPG dengan nama unik
+                    $foto = $nrp . "_" . time() . ".jpg";
+                    Storage::put($folderPath . $foto, $decodedImage);
+                } else {
+                    return Redirect::back()->with(['error' => 'Format foto cropped tidak valid.']);
+                }
+            } elseif ($request->hasFile('foto')) {
+                // Hapus foto lama jika ada
+                if ($karyawan->foto && Storage::exists($folderPath . $karyawan->foto)) {
+                    Storage::delete($folderPath . $karyawan->foto);
+                }
+
+                // Simpan file upload dengan nama unik
+                $extension = $request->file('foto')->getClientOriginalExtension();
+                $foto = $nrp . "_" . time() . "." . $extension;
+                $request->file('foto')->storeAs($folderPath, $foto);
+            }
+            // Jika tidak ada foto baru, gunakan foto lama
+
+        } catch (\Exception $e) {
+            return Redirect::back()->with(['error' => 'Gagal memproses foto: ' . $e->getMessage()]);
         }
-    
-        if (empty($request->password)) {
+
+        // Siapkan data update
         $data = [
             'nama' => $nama,
             'telp' => $telp,
             'foto' => $foto
         ];
-    } else {
-        $data = [
-            'nama' => $nama,
-            'telp' => $telp,
-            'password' => $password,
-            'foto' => $foto
-        ];
-    }
 
-    $update = DB::table('karyawan')->where('nrp', $nrp)->update($data);
-    if($update){
-        if($request->hasFile('foto')){
-            $folderPath = "uploads/karyawan/fotoProfile/";
-            $request->file('foto')->storeAs($folderPath, $foto);
+        if (!empty($request->password)) {
+            $data['password'] = Hash::make($request->password);
         }
-        return Redirect::back()->with(['success' => 'Profile berhasil di Upadate']);
-    }else {
-        return Redirect::back()->with(['error' => 'Profile gagal di Update']);
+
+        // Update database
+        $update = DB::table('karyawan')->where('nrp', $nrp)->update($data);
+        if($update){
+            return Redirect::back()->with(['success' => 'Profile berhasil diupdate']);
+        }else {
+            return Redirect::back()->with(['error' => 'Profile gagal diupdate']);
+        }
     }
-
-}
-
     public function histori(){
         $namaBulan = ["","Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
         
@@ -564,7 +604,6 @@ class PresensiController extends Controller
     }
 
     public function cetakDailyReport(Request $request){
-
         $tahunSekarang = date('Y'); // Hitung tahun sekarang
         $request->validate([
             'tanggal' => 'required|date|before_or_equal:today',
@@ -574,7 +613,6 @@ class PresensiController extends Controller
         $bulan = date('m', strtotime($tanggal));
         $tahun = date('Y', strtotime($tanggal));
         $namaBulan = ["","Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-
 
         //Query data presensi untuk tanggal spesifik
         $query = Karyawan::query();

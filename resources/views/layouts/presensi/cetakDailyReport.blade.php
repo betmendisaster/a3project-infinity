@@ -27,39 +27,56 @@
         </table>
         <table class="tablePresensi">
             <tr>
-                <th>tanggal</th>
+                <th>Tanggal</th>
                 <th>NRP</th>
                 <th>Nama</th>
                 <th>Department</th>
                 <th>Jabatan</th>
                 <th>Jam In</th>
                 <th>Jam Out</th>
-                <th>Status</th>  <!-- Diperbaiki: Ganti "Department" duplikat dengan "Status" -->
+                <th>Status</th>
                 <th>Jam Kerja</th>
                 <th>Kode Izin</th>
                 <th>Keterangan</th>
             </tr>
-            @foreach($rekap as $r)
+            @php
+                $totalHadir = 0;
+                $totalTidakAbsen = 0;
+            @endphp
+            @forelse($rekap as $r)
             <tr>
-                <td>{{ date('d-m-Y', strtotime($tanggal)) }}</td>  <!-- Perbaikan: Gunakan $tanggal untuk semua baris agar kolom tanggal selalu terisi -->
+                <td>{{ date('d-m-Y', strtotime($tanggal)) }}</td>
                 <td>{{ $r->nrp }}</td>
                 <td>{{ $r->nama }}</td>
-                <td>{{ $r->kode_dept }}</td>
+                <td>{{ $r->kode_dept ?? 'NA' }}</td> <!-- Jika ada join department, ganti dengan nama_dept -->
                 <td>{{ $r->jabatan }}</td>
-                <td>{{ $r->jam_in ?? 'Tidak Absen In' }}</td>
-                <?php
-                    // Untuk shift malam, pastikan out ditampilkan meskipun dilakukan di hari berikutnya
-                    $jam_out_display = $r->jam_out ?? 'NA';
-                    // Jika shift malam (jam_pulang < jam_masuk), tambahkan indikator jika perlu
-                    $isShiftMalam = (!empty($r->jam_pulang) && !empty($r->jam_masuk) && $r->jam_pulang < $r->jam_masuk);
-                ?>
-                <td>{{ $jam_out_display ?? 'Tidak Absen Out' }}</td>
+                <td>{{ $r->jam_in ? date('H:i', strtotime($r->jam_in)) : 'Tidak Absen In' }}</td>
+                <td>{{ $r->jam_out ? date('H:i', strtotime($r->jam_out)) : 'Tidak Absen Out' }}</td>
                 <td>{{ $r->status ?? 'NA' }}</td>
                 <td>{{ $r->nama_jam_kerja ?? 'NA' }}</td>
                 <td>{{ $r->kode_izin ?? 'NA' }}</td>
                 <td>{{ $r->keterangan ?? 'NA' }}</td>
             </tr>
-            @endforeach
+            @php
+                if ($r->status == 'h') $totalHadir++;
+                if (!$r->jam_in) $totalTidakAbsen++;
+            @endphp
+            @empty
+            <tr>
+                <td colspan="11" style="text-align: center; color: red;">Tidak ada data absen untuk tanggal ini.</td>
+            </tr>
+            @endforelse
+        </table>
+        <!-- Tambah Summary Total (Opsional) -->
+        <table class="tablePresensi" style="margin-top: 20px;">
+            <tr>
+                <th colspan="10" style="text-align: right;">Total Hadir</th>
+                <th>{{ $totalHadir }}</th>
+            </tr>
+            <tr>
+                <th colspan="10" style="text-align: right;">Total Tidak Absen In</th>
+                <th>{{ $totalTidakAbsen }}</th>
+            </tr>
         </table>
         <table width="100%" style="margin-top:100px;">
             <tr>
