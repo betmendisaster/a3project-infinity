@@ -1,48 +1,87 @@
 <!-- Modal In -->
-<div class="fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center" id="imageModalIn" style="display: none;">
-    <div class="bg-white rounded-lg overflow-hidden shadow-lg max-w-md w-full mx-auto mt-20">
-        <div class="flex justify-between items-center p-4 border-b">
-            <h3 class="text-lg font-semibold">
-                Foto Absen Masuk Hari ini
+<div id="imageModalIn"
+    class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center px-3">
+    
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center px-4 py-3 border-b">
+            <h3 class="text-sm md:text-base font-semibold">
+                Foto Absen Masuk Hari Ini
             </h3>
-            <button class="text-gray-500 hover:text-gray-700" id="closeModalBtnIn">
-                <i class="fas fa-times">
-                </i>
+            <button id="closeModalBtnIn" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-        <div class="p-4">
-            @if ($presensiHariIni != null)
+
+        <!-- Content -->
+        <div class="relative bg-black flex items-center justify-center">
+            @if ($presensiHariIni && $presensiHariIni->foto_in)
                 @php
                     $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_in);
                 @endphp
-                <img src="{{ url($path) }}" alt="Foto Absen Masuk" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;">
+
+                <img
+                    src="{{ url($path) }}"
+                    class="w-full max-h-[75vh] object-contain bg-black"
+                    alt="Foto Absen Masuk">
+
+                <!-- WATERMARK -->
+                <div
+                    class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
+                    <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                    <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
+                    <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
+                </div>
             @else
-                <img alt="Placeholder: Tidak ada foto absen masuk" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;" src="{{ asset('assets/img/loader.gif') }}" />
+                <div class="py-20 text-gray-400 text-sm">
+                    Belum ada foto absen masuk
+                </div>
             @endif
         </div>
     </div>
 </div>
 
+
 <!-- Modal Out -->
-<div class="fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center" id="imageModalOut" style="display: none;">
-    <div class="bg-white rounded-lg overflow-hidden shadow-lg max-w-md w-full mx-auto mt-20">
-        <div class="flex justify-between items-center p-4 border-b">
-            <h3 class="text-lg font-semibold">
-                Foto Absen Pulang Hari ini
+<div id="imageModalOut"
+    class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center px-3">
+    
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center px-4 py-3 border-b">
+            <h3 class="text-sm md:text-base font-semibold">
+                Foto Absen Pulang Hari Ini
             </h3>
-            <button class="text-gray-500 hover:text-gray-700" id="closeModalBtnOut">
-                <i class="fas fa-times">
-                </i>
+            <button id="closeModalBtnOut" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-        <div class="p-4">
-            @if ($presensiHariIni != null && $presensiHariIni->jam_out != null)
+
+        <!-- Content -->
+        <div class="relative bg-black flex items-center justify-center">
+            @if ($presensiHariIni && $presensiHariIni->foto_out)
                 @php
                     $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_out);
                 @endphp
-                <img src="{{ url($path) }}" alt="Foto Absen Pulang" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;">
+
+                <img
+                    src="{{ url($path) }}"
+                    class="w-full max-h-[75vh] object-contain bg-black"
+                    alt="Foto Absen Pulang">
+
+                <!-- WATERMARK -->
+                <div
+                    class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
+                    <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                    <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
+                    <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
+                </div>
             @else
-                <img alt="Placeholder: Tidak ada foto absen pulang" class="w-full h-auto max-h-96 object-contain" style="max-width: 100%; height: auto;" src="{{ asset('assets/img/loader.gif') }}" />
+                <div class="py-20 text-gray-400 text-sm">
+                    Belum ada foto absen pulang
+                </div>
             @endif
         </div>
     </div>
@@ -162,7 +201,7 @@
 </div>
 {{-- End Hasil Absensi --}}
 
-<script>
+{{-- <script>
     // Modal Hasil Absen
     document.getElementById('openHasilAbsen').addEventListener('click', function() {
         const modalHasilAbsen = document.getElementById('hasilAbsen');
@@ -215,4 +254,20 @@
         }
     });
     // End Modal out
+</script> --}}
+
+<script>
+    const modalIn = document.getElementById('imageModalIn');
+    const modalOut = document.getElementById('imageModalOut');
+
+    document.getElementById('openModalBtnIn').onclick = () => modalIn.classList.remove('hidden');
+    document.getElementById('closeModalBtnIn').onclick = () => modalIn.classList.add('hidden');
+
+    document.getElementById('openModalBtnOut').onclick = () => modalOut.classList.remove('hidden');
+    document.getElementById('closeModalBtnOut').onclick = () => modalOut.classList.add('hidden');
+
+    window.addEventListener('click', e => {
+        if (e.target === modalIn) modalIn.classList.add('hidden');
+        if (e.target === modalOut) modalOut.classList.add('hidden');
+    });
 </script>

@@ -81,17 +81,26 @@
                 </div>
             </a>
             <div class="flex justify-around w-full mt-4">
-                <div class="bg-gradient-to-r from-green-700 to-lime-700 text-white rounded-lg p-2 flex items-center w-1/2 mx-1 cursor-pointer hover:from-green-600 hover:to-lime-600 transition duration-300 shadow-md relative"
-                    id="openModalBtnIn">
+                <!-- MASUK -->
+                <button
+                    type="button"
+                    id="openModalBtnIn"
+                    class="bg-gradient-to-r from-green-700 to-lime-700 text-white rounded-lg p-3 flex items-center w-1/2 mx-1 hover:from-green-600 hover:to-lime-600 transition duration-300 shadow-md relative focus:outline-none">
                     <i class="fas fa-sign-in-alt text-xl"></i>
                     <div class="flex flex-col items-center ml-2">
                         <p class="text-md font-bold">Masuk</p>
-                        <p class="text-xs">{{ $presensiHariIni != null ? $presensiHariIni->jam_in : 'Belum Absen' }}</p>
+                        <p class="text-xs">
+                            {{ $presensiHariIni != null ? $presensiHariIni->jam_in : 'Belum Absen' }}
+                        </p>
                     </div>
-                    <i class="fas fa-camera text-xl absolute right-2 top-1/2 transform -translate-y-1/2"></i>
-                </div>
-                <div class="bg-gradient-to-b from-red-700 to-pink-700 text-white rounded-lg p-2 flex items-center w-1/2 mx-1 cursor-pointer hover:from-red-600 hover:to-pink-600 transition duration-300 shadow-md relative"
-                    id="openModalBtnOut">
+                    <i class="fas fa-camera text-xl absolute right-3 top-1/2 -translate-y-1/2"></i>
+                </button>
+
+                <!-- PULANG -->
+                <button
+                    type="button"
+                    id="openModalBtnOut"
+                    class="bg-gradient-to-r from-red-700 to-pink-700 text-white rounded-lg p-3 flex items-center w-1/2 mx-1 hover:from-red-600 hover:to-pink-600 transition duration-300 shadow-md relative focus:outline-none">
                     <i class="fas fa-sign-out-alt text-xl"></i>
                     <div class="flex flex-col items-center ml-2">
                         <p class="text-md font-bold">Pulang</p>
@@ -99,9 +108,10 @@
                             {{ $presensiHariIni != null && $presensiHariIni->jam_out != null ? $presensiHariIni->jam_out : 'Belum Absen' }}
                         </p>
                     </div>
-                    <i class="fas fa-camera text-xl absolute right-2 top-1/2 transform -translate-y-1/2"></i>
-                </div>
+                    <i class="fas fa-camera text-xl absolute right-3 top-1/2 -translate-y-1/2"></i>
+                </button>
             </div>
+
             <div class="bg-white text-black w-full rounded-t-lg pt-4 mt-3 flex flex-col items-center relative shadow-md">
                 <h2 class="text-center font-semibold mb-4 text-sm">
                     Gadget Presensi Bulan {{ $namaBulan[$bulanIni] }} Tahun {{ $tahunIni }}
