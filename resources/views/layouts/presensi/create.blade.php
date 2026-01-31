@@ -1,12 +1,24 @@
 @extends('layouts.layoutNoFooter')
 @section('header')
     <style>
-        .fotoduls,
-        .fotoduls video {
+        .fotoduls {
             display: inline-block;
             width: 100% !important;
-            height: auto !important;
+            height: 0 !important;  /* Gunakan padding-bottom untuk aspect ratio */
+            padding-bottom: 133.33% !important;  /* 4/3 * 100% ≈ 133.33% untuk aspect 3:4 */
+            position: relative;
             margin: auto;
+            border-radius: 15px;
+            overflow: hidden;  /* Pastikan video tidak keluar dari border */
+        }
+
+        .fotoduls video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;  /* Pastikan video memenuhi area tanpa distorsi */
             border-radius: 15px;
         }
 
@@ -192,14 +204,36 @@
         var radius_sound = document.getElementById('radius_sound');
 
         Webcam.set({
-            height: 480,
-            width: 640,
+            width: 270,          // Lebar dikurangi untuk mobile (aspect 3:4)
+            height: 360,         // Tinggi dikurangi untuk mobile (aspect 3:4)
+            dest_width: 270,     // Pastikan output foto tetap 270px lebar
+            dest_height: 360,    // Pastikan output foto tetap 360px tinggi
             image_format: 'jpeg',
-            jpeg_quality: 80,
+            jpeg_quality: 85,    // Sedikit dikurangi dari 90 untuk file lebih kecil di mobile
             mobileAutoAdvance: true,
-            flip_horiz: true
+            flip_horiz: true,
+            constraints: {       // Tambahkan constraints untuk aspect ratio di semua device, khusus mobile
+                video: {
+                    width: { ideal: 270 },
+                    height: { ideal: 360 },
+                    aspectRatio: { ideal: 3/4 },  // Paksa aspect ratio 3:4
+                    facingMode: 'user'  // Gunakan kamera depan di mobile
+                }
+            }
         });
         Webcam.attach('.fotoduls');
+
+        // Fallback untuk browser mobile lama
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Browser tidak mendukung webcam modern. Gunakan browser terbaru seperti Chrome atau Safari di mobile.');
+        }
+
+        // Tambahan untuk mobile: Deteksi orientasi dan beri peringatan jika landscape
+        window.addEventListener('orientationchange', function() {
+            if (window.orientation === 90 || window.orientation === -90) {
+                alert('Untuk hasil foto terbaik, gunakan orientasi portrait (tegak).');
+            }
+        });
 
         var lokasi = document.getElementById('lokasi');
         if (navigator.geolocation) {
