@@ -15,30 +15,36 @@
         </div>
 
         <!-- Content -->
-        <div class="relative bg-black flex items-center justify-center">
-            @if ($presensiHariIni && $presensiHariIni->foto_in)
-                @php
-                    $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_in);
-                @endphp
+        <!-- Content -->
+            <div class="relative bg-black flex items-center justify-center">
+                @if ($presensiHariIni && $presensiHariIni->foto_in)
+                    @php
+                        $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_in);
+                    @endphp
 
-                <img
-                    src="{{ url($path) }}"
-                    class="w-full max-h-[75vh] object-contain bg-black"
-                    alt="Foto Absen Masuk">
+                    <!-- FRAME FOTO -->
+                    <div class="relative w-full aspect-[3/4] bg-black flex items-center justify-center p-2">
+                        <img
+                            src="{{ url($path) }}"
+                            alt="Foto Absen Masuk"
+                            class="max-w-full max-h-full object-contain"
+                            style="image-orientation: from-image;"
+                        >
 
-                <!-- WATERMARK -->
-                <div
-                    class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
-                    <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
-                    <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
-                    <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
-                </div>
-            @else
-                <div class="py-20 text-gray-400 text-sm">
-                    Belum ada foto absen masuk
-                </div>
-            @endif
-        </div>
+                        <!-- WATERMARK -->
+                        <div
+                            class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
+                            <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                            <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
+                            <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
+                        </div>
+                    </div>
+                @else
+                    <div class="py-20 text-gray-400 text-sm">
+                        Belum ada foto absen masuk
+                    </div>
+                @endif
+            </div>
     </div>
 </div>
 
@@ -58,7 +64,7 @@
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-
+        
         <!-- Content -->
         <div class="relative bg-black flex items-center justify-center">
             @if ($presensiHariIni && $presensiHariIni->foto_out)
@@ -66,17 +72,22 @@
                     $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_out);
                 @endphp
 
-                <img
-                    src="{{ url($path) }}"
-                    class="w-full max-h-[75vh] object-contain bg-black"
-                    alt="Foto Absen Pulang">
+                <!-- FRAME FOTO -->
+                <div class="relative w-full aspect-[3/4] bg-black flex items-center justify-center p-2">
+                    <img
+                        src="{{ url($path) }}"
+                        alt="Foto Absen Pulang"
+                        class="max-w-full max-h-full object-contain"
+                        style="image-orientation: from-image;"
+                    >
 
-                <!-- WATERMARK -->
-                <div
-                    class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
-                    <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
-                    <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
-                    <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
+                    <!-- WATERMARK -->
+                    <div
+                        class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
+                        <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                        <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
+                        <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
+                    </div>
                 </div>
             @else
                 <div class="py-20 text-gray-400 text-sm">
@@ -84,6 +95,7 @@
                 </div>
             @endif
         </div>
+
     </div>
 </div>
 
