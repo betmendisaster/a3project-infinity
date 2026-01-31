@@ -18,7 +18,15 @@
     <!-- Tailwindcss CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/@themesberg/flowbite@1.2.0/dist/flowbite.min.css" />
-    <title>A3-app</title>
+    <title>Infinity</title>
+    <link rel="manifest" href="/manifest.json">
+
+    <meta name="theme-color" content="#0d6efd">
+
+    <!-- iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="A3 Project">
+    <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 
     {{-- Loader --}}
     <style>
@@ -59,7 +67,11 @@
         }
     </style>
 </head>
-
+<script>
+    if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+    }
+</script>
 <body class="bg-gradient-to-r from-blue-400/10 via-purple-500/10 to-pink-500/10">
     <div id="loader" class="fixed inset-0 flex flex-col items-center justify-center bg-white z-50 pb-20">
         <div class="loader"></div>

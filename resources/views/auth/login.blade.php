@@ -21,7 +21,15 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>A3-app -Presensi-</title>
+    <title>Infinity</title>
+    <link rel="manifest" href="/manifest.json">
+
+    <meta name="theme-color" content="#0d6efd">
+
+    <!-- iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="A3 Project">
+    <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
     <style>
         /* Menambahkan gaya untuk latar belakang loader */
         .loader-bg {
@@ -72,7 +80,11 @@
     </style>
 </head>
 
-
+<script>
+    if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+    }
+</script>
 <body class="font-Oswald">
     {{-- Loader --}}
     <div class="loader-bg" id="loader">
