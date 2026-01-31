@@ -1,3 +1,8 @@
+    @php
+    $user = Auth::guard('karyawan')->user();
+    $namaKaryawan = $user->nama ?? '-';
+    $nrpKaryawan  = $user->nrp ?? '-';
+    @endphp
 <!-- Modal In -->
 <div id="imageModalIn"
     class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center px-3">
@@ -15,7 +20,6 @@
         </div>
 
         <!-- Content -->
-        <!-- Content -->
             <div class="relative bg-black flex items-center justify-center">
                 @if ($presensiHariIni && $presensiHariIni->foto_in)
                     @php
@@ -23,7 +27,7 @@
                     @endphp
 
                     <!-- FRAME FOTO -->
-                    <div class="relative w-full aspect-[3/4] bg-black flex items-center justify-center p-2">
+                    <div class="relative w-full aspect-[3/4] max-h-[55vh] sm:max-h-[60vh] md:max-h-[70vh] bg-black flex items-center justify-center p-2">
                         <img
                             src="{{ url($path) }}"
                             alt="Foto Absen Masuk"
@@ -32,11 +36,16 @@
                         >
 
                         <!-- WATERMARK -->
-                        <div
-                            class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
-                            <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
-                            <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
-                            <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
+                        <div class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm leading-snug">
+                            
+                            <div class="font-semibold">{{ $namaKaryawan }}</div>
+                            <div>NRP: {{ $nrpKaryawan }}</div>
+
+                            <div class="mt-1 border-t border-white/30 pt-1">
+                                <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                                <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
+                                <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
+                            </div>
                         </div>
                     </div>
                 @else
@@ -73,21 +82,26 @@
                 @endphp
 
                 <!-- FRAME FOTO -->
-                <div class="relative w-full aspect-[3/4] bg-black flex items-center justify-center p-2">
+                <div class="relative w-full aspect-[3/4] max-h-[55vh] sm:max-h-[60vh] md:max-h-[70vh] bg-black flex items-center justify-center p-2">
                     <img
                         src="{{ url($path) }}"
                         alt="Foto Absen Pulang"
                         class="max-w-full max-h-full object-contain"
                         style="image-orientation: from-image;"
                     >
-
                     <!-- WATERMARK -->
-                    <div
-                        class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
-                        <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
-                        <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
-                        <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
-                    </div>
+                        <div
+                            class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm leading-snug">
+                            
+                            <div class="font-semibold">{{ $namaKaryawan }}</div>
+                            <div>NRP: {{ $nrpKaryawan }}</div>
+
+                            <div class="mt-1 border-t border-white/30 pt-1">
+                                <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                                <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
+                                <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
+                            </div>
+                        </div>
                 </div>
             @else
                 <div class="py-20 text-gray-400 text-sm">
