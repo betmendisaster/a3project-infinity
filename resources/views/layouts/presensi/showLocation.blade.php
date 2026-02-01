@@ -1,5 +1,5 @@
 <div class="container-fluid">
-    <!-- Kolom Atas: Peta Lokasi -->
+    <!-- MAP -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
@@ -7,13 +7,13 @@
                     <h5 class="card-title">Lokasi Presensi</h5>
                 </div>
                 <div class="card-body">
-                    <div id="map" style="height: 400px; width: 100%;"></div>
+                    <div id="map" style="height:400px"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Kolom Bawah: Informasi Presensi -->
+    <!-- INFO -->
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -21,126 +21,118 @@
                     <h5 class="card-title">Informasi Presensi</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>NRP:</strong></div>
-                        <div class="col-sm-8">{{ $presensi->nrp }}</div>
+
+                    @php
+                        $rows = [
+                            'NRP' => $presensi->nrp,
+                            'Nama' => $presensi->nama,
+                            'Tanggal Presensi' => \Carbon\Carbon::parse($presensi->tgl_presensi)->format('d-m-Y'),
+                            'Jam Masuk' => $presensi->jam_in ?? 'Tidak Ada',
+                        ];
+                    @endphp
+
+                    @foreach ($rows as $label => $value)
+                    <div class="row mb-2">
+                        <div class="col-sm-4 fw-bold">{{ $label }}</div>
+                        <div class="col-sm-8">{{ $value }}</div>
                     </div>
+                    @endforeach
+
                     <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Nama:</strong></div>
-                        <div class="col-sm-8">{{ $presensi->nama }}</div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Tanggal Presensi:</strong></div>
-                        <div class="col-sm-8">{{ \Carbon\Carbon::parse($presensi->tgl_presensi)->format('d-m-Y') }}</div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Nama Lokasi (IN):</strong></div>
-                        <div class="col-sm-8">{{ $presensi->nama_lokasi ?? 'Tidak Diketahui' }}</div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Jam Masuk:</strong></div>
-                        <div class="col-sm-8">{{ $presensi->jam_in ?? 'Tidak Ada' }}</div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Foto (IN):</strong></div>
+                        <div class="col-sm-4 fw-bold">Foto (IN)</div>
                         <div class="col-sm-8">
                             @if($presensi->foto_in)
-                                <img src="{{ asset('storage/uploads/absensi/' . $presensi->foto_in) }}" alt="Foto IN" class="img-fluid rounded" style="max-width: 150px; max-height: 150px;">
+                                <img src="{{ asset('storage/uploads/absensi/'.$presensi->foto_in) }}"
+                                     class="img-fluid rounded"
+                                     style="max-width:150px">
                             @else
                                 <span class="text-muted">Tidak ada foto</span>
                             @endif
                         </div>
                     </div>
 
-                    <!-- Informasi OUT: Hanya tampil jika ada data OUT -->
-                    @if($presensi->jam_out && $presensi->lokasi_out)
+                    @if($presensi->jam_out)
                         <hr>
-                        <div class="row mb-3">
-                            <div class="col-sm-4"><strong>Jam Keluar:</strong></div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 fw-bold">Jam Keluar</div>
                             <div class="col-sm-8">{{ $presensi->jam_out }}</div>
                         </div>
+
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>Nama Lokasi (OUT):</strong></div>
-                            <div class="col-sm-8">{{ $presensi->nama_lokasi ?? 'Tidak Diketahui' }}</div> <!-- Jika nama lokasi sama, bisa gunakan yang sama atau tambah logika -->
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col-sm-4"><strong>Foto (OUT):</strong></div>
+                            <div class="col-sm-4 fw-bold">Foto (OUT)</div>
                             <div class="col-sm-8">
                                 @if($presensi->foto_out)
-                                    <img src="{{ asset('storage/uploads/absensi/' . $presensi->foto_out) }}" alt="Foto OUT" class="img-fluid rounded" style="max-width: 150px; max-height: 150px;">
+                                    <img src="{{ asset('storage/uploads/absensi/'.$presensi->foto_out) }}"
+                                         class="img-fluid rounded"
+                                         style="max-width:150px">
                                 @else
                                     <span class="text-muted">Tidak ada foto</span>
                                 @endif
                             </div>
                         </div>
                     @endif
+
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Script untuk inisialisasi peta -->
 <script>
-    // Parse lokasi IN
-    var lokasiIn = "{{ $presensi->lokasi_in }}";
-    var latitudeIn = null, longitudeIn = null;
-    if (lokasiIn) {
-        var lokIn = lokasiIn.split(",");
-        latitudeIn = parseFloat(lokIn[0]);
-        longitudeIn = parseFloat(lokIn[1]);
+(function () {
+
+    const lokasi = {
+        in: "{{ $presensi->lokasi_in }}",
+        out: "{{ $presensi->lokasi_out }}"
+    };
+
+    const parseLokasi = (lokasi) => {
+        if (!lokasi || !lokasi.includes(',')) return null;
+        const [lat, lng] = lokasi.split(',').map(Number);
+        return isNaN(lat) || isNaN(lng) ? null : [lat, lng];
+    };
+
+    const inLoc  = parseLokasi(lokasi.in);
+    const outLoc = parseLokasi(lokasi.out);
+
+    if (!inLoc && !outLoc) {
+        document.getElementById('map').innerHTML =
+            '<p class="text-muted text-center">Lokasi tidak tersedia</p>';
+        return;
     }
 
-    // Parse lokasi OUT (jika ada)
-    var lokasiOut = "{{ $presensi->lokasi_out }}";
-    var latitudeOut = null, longitudeOut = null;
-    if (lokasiOut) {
-        var lokOut = lokasiOut.split(",");
-        latitudeOut = parseFloat(lokOut[0]);
-        longitudeOut = parseFloat(lokOut[1]);
+    const center = inLoc || outLoc;
+    const map = L.map('map').setView(center, 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let markers = [];
+
+    if (inLoc) {
+        const mIn = L.marker(inLoc).addTo(map)
+            .bindPopup("<b>{{ $presensi->nama }}</b><br>Presensi IN");
+        markers.push(mIn);
+        L.circle(inLoc, { radius:20 }).addTo(map);
     }
 
-    // Inisialisasi peta
-    if (latitudeIn || latitudeOut) {
-        // Tentukan pusat peta: Prioritas IN, jika tidak ada gunakan OUT
-        var centerLat = latitudeIn || latitudeOut;
-        var centerLng = longitudeIn || longitudeOut;
-        var map = L.map('map').setView([centerLat, centerLng], 15);
+    if (outLoc) {
+        const mOut = L.marker(outLoc, {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+                iconSize: [25,41],
+                iconAnchor: [12,41]
+            })
+        }).addTo(map).bindPopup("<b>{{ $presensi->nama }}</b><br>Presensi OUT");
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // Marker untuk IN (jika ada)
-        if (latitudeIn && longitudeIn) {
-            var markerIn = L.marker([latitudeIn, longitudeIn]).addTo(map);
-            var circleIn = L.circle([latitudeIn, longitudeIn], {
-                color: 'red',
-                fillColor: '#f03',
-                fillOpacity: 0.5,
-                radius: 20
-            }).addTo(map);
-            markerIn.bindPopup("<b>{{ $presensi->nama }}</b><br>Lokasi Presensi IN").openPopup();
-        }
-
-        // Marker untuk OUT (jika ada)
-        if (latitudeOut && longitudeOut) {
-            var markerOut = L.marker([latitudeOut, longitudeOut], {icon: L.icon({iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]})}).addTo(map); // Marker biru untuk OUT
-            var circleOut = L.circle([latitudeOut, longitudeOut], {
-                color: 'blue',
-                fillColor: '#03f',
-                fillOpacity: 0.5,
-                radius: 20
-            }).addTo(map);
-            markerOut.bindPopup("<b>{{ $presensi->nama }}</b><br>Lokasi Presensi OUT");
-        }
-
-        // Jika ada keduanya, fit bounds untuk menampilkan kedua marker
-        if (latitudeIn && longitudeIn && latitudeOut && longitudeOut) {
-            var group = new L.featureGroup([markerIn, markerOut]);
-            map.fitBounds(group.getBounds());
-        }
-    } else {
-        document.getElementById('map').innerHTML = '<p class="text-muted">Lokasi tidak tersedia.</p>';
+        markers.push(mOut);
+        L.circle(outLoc, { radius:20, color:'blue' }).addTo(map);
     }
+
+    if (markers.length > 1) {
+        map.fitBounds(L.featureGroup(markers).getBounds());
+    }
+
+})();
 </script>

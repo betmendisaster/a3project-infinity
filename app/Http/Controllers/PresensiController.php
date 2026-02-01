@@ -425,19 +425,87 @@ class PresensiController extends Controller
         return view ('layouts.presensi.monitoring');
     }
 
-    public function getPresensi(Request $request){
+    public function getPresensi(Request $request)
+    {
         $tanggal = $request->tanggal;
-        $presensi = DB::table('presensi')
-        ->select('presensi.*','nama','karyawan.kode_dept','jam_masuk','nama_jam_kerja','jam_masuk','jam_pulang','keterangan')
-        ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-        ->leftJoin('cis','presensi.kode_izin','=','cis.kode_izin')
-        ->join('karyawan','presensi.nrp','=','karyawan.nrp')
-        ->join('department','karyawan.kode_dept','=','department.kode_dept')
-        ->where('tgl_presensi',$tanggal)
-        ->get();
+        $besok   = date('Y-m-d', strtotime('+1 day', strtotime($tanggal)));
 
-        return view('layouts.presensi.getPresensi',compact('presensi'));
+        $mapHari = [
+            'monday'    => 'senin',
+            'tuesday'   => 'selasa',
+            'wednesday' => 'rabu',
+            'thursday'  => 'kamis',
+            'friday'    => 'jumat',
+            'saturday'  => 'sabtu',
+            'sunday'    => 'minggu',
+        ];
+
+        $hari = $mapHari[strtolower(date('l', strtotime($tanggal)))];
+
+        $presensi = DB::table('presensi')
+            ->join('karyawan', 'presensi.nrp', '=', 'karyawan.nrp')
+
+            // JAM KERJA PERSONAL
+            ->leftJoin('settings_jam_kerja as sjk', function ($join) use ($hari) {
+                $join->on('karyawan.nrp', '=', 'sjk.nrp')
+                    ->where('sjk.hari', $hari);
+            })
+
+            // JAM KERJA DEPT
+            ->leftJoin('settings_jk_dept', 'karyawan.kode_dept', '=', 'settings_jk_dept.kode_dept')
+            ->leftJoin('settings_jk_dept_detail as sjdd', function ($join) use ($hari) {
+                $join->on('settings_jk_dept.kode_jk_dept', '=', 'sjdd.kode_jk_dept')
+                    ->where('sjdd.hari', $hari);
+            })
+
+            // PRIORITAS JAM KERJA (PERSONAL > DEPT)
+            ->leftJoin('jam_kerja', function ($join) {
+                $join->on(
+                    DB::raw('COALESCE(sjk.kode_jam_kerja, sjdd.kode_jam_kerja)'),
+                    '=',
+                    'jam_kerja.kode_jam_kerja'
+                );
+            })
+
+            ->leftJoin('master_cuti', 'presensi.kode_izin', '=', 'master_cuti.kode_cuti')
+
+            // FILTER TANGGAL + SHIFT (AMAN NULL)
+            ->where(function ($q) use ($tanggal, $besok) {
+
+                // TIDAK ADA JAM KERJA
+                $q->whereNull('jam_kerja.kode_jam_kerja')
+                ->whereDate('presensi.tgl_presensi', $tanggal)
+
+                // SHIFT NORMAL
+                ->orWhere(function ($q2) use ($tanggal) {
+                    $q2->whereNotNull('jam_kerja.kode_jam_kerja')
+                    ->whereRaw('jam_kerja.jam_masuk <= jam_kerja.jam_pulang')
+                    ->whereDate('presensi.tgl_presensi', $tanggal);
+                })
+
+                // SHIFT MALAM
+                ->orWhere(function ($q2) use ($tanggal, $besok) {
+                    $q2->whereNotNull('jam_kerja.kode_jam_kerja')
+                    ->whereRaw('jam_kerja.jam_masuk > jam_kerja.jam_pulang')
+                    ->whereIn('presensi.tgl_presensi', [$tanggal, $besok]);
+                });
+            })
+
+            ->select(
+                'presensi.*',
+                'karyawan.nama',
+                'karyawan.kode_dept',
+                'jam_kerja.nama_jam_kerja',
+                'jam_kerja.jam_masuk',
+                'jam_kerja.jam_pulang',
+                'master_cuti.nama_cuti'
+            )
+            ->orderBy('karyawan.nama')
+            ->get();
+
+        return view('layouts.presensi.getPresensi', compact('presensi'))->render();
     }
+
 
     public function showLocation(Request $request) {
         $id = $request->id;

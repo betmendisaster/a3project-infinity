@@ -39,10 +39,11 @@
                                                 <path d="M15 19l2 2l4 -4" />
                                             </svg>
                                         </span>
-                                        <input type="text" id="tanggal" name="tanggal" value="{{ date('Y-m-d') }}"
-                                            class="form-control" placeholder="Tanggal Presensi"
+                                        <input type="text"
+                                            id="tanggal"
+                                            class="form-control"
+                                            placeholder="Tanggal Presensi"
                                             autocomplete="off">
-                                    </div>
                                 </div>
                             </div>
 
@@ -89,59 +90,73 @@
     </div>
 @endsection
 @push('myscript')
-    <script>
-        $(function() {
-            $("#tanggal").datepicker({
-                autoclose: true,
-                todayHighlight: true,
-                format: 'yyyy-mm-dd'
-            }).datepicker('update', new Date());
-        });
+<script>
+document.addEventListener('DOMContentLoaded', function () {
 
-        function loadPresensi() {
-            var tanggal = $('#tanggal').val();
-            $.ajax({
-                type: 'POST',
-                url: '/getpresensi',
-                data: {
-                    _token: "{{ csrf_token() }}",
-                    tanggal: tanggal
-                },
-                cache: false,
-                success: function(respond) {
-                    $("#loadPresensi").html(respond);
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error loading presensi:", error);
-                    $("#loadPresensi").html('<p class="text-danger">Gagal memuat data presensi.</p>');
-                }
-            });
+    if (typeof flatpickr === "undefined") {
+        console.error("Flatpickr BELUM ter-load");
+        return;
+    }
+
+    flatpickr("#tanggal", {
+        dateFormat: "Y-m-d",
+        defaultDate: "{{ date('Y-m-d') }}",
+        onReady: function(selectedDates, dateStr) {
+            loadPresensi(dateStr);
+        },
+        onChange: function(selectedDates, dateStr) {
+            loadPresensi(dateStr);
         }
-        $("#tanggal").change(function(e) {
-            loadPresensi();
-        });
-        loadPresensi();
+    });
 
-        // Tambahan: Event handler untuk tombol lokasi
-        $(document).on('click', '.btn-location', function() {
-            var id = $(this).data('id');
-            if (!id) {
-                alert('ID tidak ditemukan!');
-                return;
-            }
-            $.ajax({
-                type: 'GET',
-                url: '/presensi/showLocation', // Pastikan route ini ada di routes/web.php
-                data: { id: id },
-                success: function(response) {
-                    $('#loadLocation').html(response);
-                    $('#modal-location').modal('show');
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error loading location:", error);
-                    alert('Gagal memuat lokasi: ' + error);
+    function loadPresensi(tanggal) {
+        console.log("Request presensi:", tanggal);
+
+        $.ajax({
+            type: 'POST',
+            url: '/getpresensi',
+            data: {
+                _token: "{{ csrf_token() }}",
+                tanggal: tanggal
+            },
+            success: function(respond) {
+                if (respond.trim() === '') {
+                    $('#loadPresensi').html(
+                        '<tr><td colspan="12" class="text-center text-muted">Tidak ada data</td></tr>'
+                    );
+                } else {
+                    $('#loadPresensi').html(respond);
                 }
-            });
+            },
+            error: function(xhr) {
+                console.error(xhr.responseText);
+                $('#loadPresensi').html(
+                    '<tr><td colspan="12" class="text-danger text-center">Error load data</td></tr>'
+                );
+            }
         });
-    </script>
+    }
+
+    // tombol lokasi
+    $(document).on('click', '.location', function(e) {
+        e.preventDefault();
+        let id = $(this).attr('id');
+
+        $.ajax({
+            type: 'POST',
+            url: '/showlocation',
+            data: {
+                _token: "{{ csrf_token() }}",
+                id: id
+            },
+            success: function(respond) {
+                $('#loadLocation').html(respond);
+                $('#modal-location').modal('show');
+            }
+        });
+    });
+
+});
+</script>
 @endpush
+
