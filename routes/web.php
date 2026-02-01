@@ -43,8 +43,8 @@ Route::middleware(['auth:karyawan'])->group(function () {
     Route::post('/presensi/{nrp}/updateProfile', [PresensiController::class, 'updateProfile']);
     
     // Histori Absen    
-    Route::get('/presensi/histori', [PresensiController::class, 'histori']);
-    Route::post('/getHistori', [PresensiController::class, 'getHistori']);
+    // Route::get('/presensi/histori', [PresensiController::class, 'histori']);
+    // Route::post('/getHistori', [PresensiController::class, 'getHistori']);
 
     // MAINTENANCE
     Route::get('/presensi/maintenance',[PresensiController::class,'maintenance']);

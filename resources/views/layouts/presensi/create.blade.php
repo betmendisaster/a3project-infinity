@@ -40,6 +40,25 @@
             margin-bottom: 0;
         }
     </style>
+    <style>
+    /* ================= TOMBOL ABSEN INTERAKTIF ================= */
+    #btnCapture {
+        animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+        70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); }
+        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+
+    .btn-disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        animation: none;
+    }
+    </style>
+
     {{-- leaflet map --}}
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     {{-- leaflet JS CDN --}}
@@ -80,9 +99,24 @@
                 </div>
             </div>
 
-            {{-- Webcam js nya --}}
+            {{-- Camera --}}
             <div class="bg-white text-gray-800 rounded-t-lg p-2 flex items-center justify-center w-full mx-1 shadow-md mt-3">
-                <div class="fotoduls"></div>
+                <div class="fotoduls">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" class="hidden"></canvas>
+                </div>
+            </div>
+            <div class="flex gap-2 justify-center mt-2">
+
+
+                <button id="btnCapture"
+                    class="bg-green-500 text-white px-4 py-3 rounded-full text-sm font-bold 
+                        shadow-lg hidden flex items-center gap-2 
+                        hover:scale-105 active:scale-95 transition duration-300">
+                    <span id="btnIcon">📸</span>
+                    <span id="btnText">ABSEN</span>
+                </button>
+
             </div>
 
             <div class="items-center shadow-lg rounded-lg p-4 w-full max-w-xs md:max-w-md lg:max-w-lg mx-auto">
@@ -92,21 +126,7 @@
             </div>
             <!-- lokasi-->
             <div class="bg-white text-gray-800 rounded-b-lg p-2 flex items-center justify-center w-full mx-1 shadow-md mt-3">
-                <input type="text" id="lokasi">
-            </div>
-
-           {{-- button take absen --}}
-            <div class="bg-slate-300 text-gray-800 rounded-b-lg p-1 flex items-center justify-center w-full mx-1 shadow-md">
-                @if ($presensiHariIni && !is_null($presensiHariIni->jam_out))
-                    {{-- Jika sudah absen out, tampilkan tombol yang bisa diklik tapi muncul popup --}}
-                    <button class="bg-gray-400 text-gray-600 rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer" id="takeabsen"><i class="fa-solid fa-camera"></i>Out</button>
-                @elseif ($presensiHariIni)
-                    {{-- Jika sudah absen in tapi belum out, tampilkan tombol out --}}
-                    <button class="bg-white text-black rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-red-800 transition duration-300 shadow-md hover:text-white" id="takeabsen"><i class="fa-solid fa-camera"></i>Out</button>
-                @else
-                    {{-- Jika belum absen in, tampilkan tombol in --}}
-                    <button class="bg-white text-black rounded-lg p-1 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-green-800 transition duration-300 shadow-md hover:text-white" id="takeabsen"><i class="fa-solid fa-camera"></i>In</button>
-                @endif
+                <input type="hidden" id="lokasi">
             </div>
         </div>
 
@@ -176,227 +196,222 @@
 @endsection
 
 @push('myscript')
-    <script>
-        window.onload = function() {
-            jam();
+<script>
+/* ================= STATUS ABSEN ================= */
+const presensiHariIni = @json($presensiHariIni);
+const sudahAbsenIn = presensiHariIni !== null;
+const sudahAbsenOut = presensiHariIni && presensiHariIni.jam_out !== null;
+
+/* ================= GLOBAL ================= */
+let lokasiReady = false;
+let currentLat = null;
+let currentLng = null;
+let mapAbsensi = null;
+let markerUser = null;
+let watchId = null;
+
+/* ================= HAPTIC ================= */
+function haptic(type="light") {
+    if (!navigator.vibrate) return;
+    if (type==="success") navigator.vibrate([40,50,40]);
+    else if (type==="error") navigator.vibrate([120,50,120]);
+    else navigator.vibrate(30);
+}
+
+/* ================= DOM READY ================= */
+document.addEventListener("DOMContentLoaded", function () {
+    jam();
+    setupButtonLabel();
+    startCameraAuto();
+    startGeofenceRealtime();
+
+    @if(!$presensiHariIni)
+        $("#modalKonfirmasiShift").removeClass("hidden");
+    @endif
+});
+
+/* ================= JAM ================= */
+function jam() {
+    const e = document.getElementById('jam');
+    const d = new Date();
+    e.innerHTML =
+        d.getHours() + ':' +
+        (d.getMinutes()<10?'0':'') + d.getMinutes() + ':' +
+        (d.getSeconds()<10?'0':'') + d.getSeconds();
+    setTimeout(jam, 1000);
+}
+
+/* ================= AUDIO ================= */
+const notifikasi_in = document.getElementById('notifikasi_in');
+const notifikasi_out = document.getElementById('notifikasi_out');
+const radius_sound = document.getElementById('radius_sound');
+
+/* ================= GEOLOCATION REALTIME ================= */
+const lokasi = document.getElementById('lokasi');
+
+function startGeofenceRealtime() {
+    if (!navigator.geolocation) {
+        Swal.fire('Error', 'Browser tidak mendukung GPS', 'error');
+        return;
+    }
+
+    watchId = navigator.geolocation.watchPosition(
+        successRealtime,
+        () => Swal.fire('GPS Gagal', 'Aktifkan GPS & coba lagi', 'error'),
+        { enableHighAccuracy:true, maximumAge:0, timeout:10000 }
+    );
+}
+
+function successRealtime(pos) {
+    currentLat = pos.coords.latitude;
+    currentLng = pos.coords.longitude;
+    lokasi.value = currentLat + ',' + currentLng;
+    lokasiReady = true;
+
+    let site = "{{ $lok_site->lokasi_cabang }}".split(",");
+    let radius = {{ $lok_site->radius_cabang }};
+    let jarak = hitungJarak(currentLat, currentLng, site[0], site[1]);
+
+    if (!mapAbsensi) {
+        mapAbsensi = L.map('map').setView([currentLat, currentLng], 16);
+        L.tileLayer(
+            'http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+            { maxZoom:20, subdomains:['mt0','mt1','mt2','mt3'] }
+        ).addTo(mapAbsensi);
+
+        L.circle([site[0], site[1]], {
+            color:'red', fillColor:'#f03', fillOpacity:0.3, radius:radius
+        }).addTo(mapAbsensi);
+    }
+
+    if (!markerUser) {
+        markerUser = L.marker([currentLat, currentLng]).addTo(mapAbsensi);
+    } else {
+        markerUser.setLatLng([currentLat, currentLng]);
+    }
+
+    /* ===== GEOFENCE LIVE ===== */
+    if (jarak <= radius) {
+        $("#btnCapture").prop("disabled", false).removeClass("btn-disabled");
+    } else {
+        $("#btnCapture").prop("disabled", true).addClass("btn-disabled");
+        haptic("error");
+    }
+}
+
+/* ================= CAMERA AUTO ================= */
+let video = document.getElementById('video');
+let canvas = document.getElementById('canvas');
+let stream = null;
+let cameraStarted = false;
+let faceDetector = ('FaceDetector' in window) ? new FaceDetector({ fastMode:true }) : null;
+
+async function startCameraAuto() {
+    if (cameraStarted || sudahAbsenOut) return;
+    cameraStarted = true;
+
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video:{ facingMode:'user' }, audio:false
+        });
+        video.srcObject = stream;
+        $("#btnCapture").removeClass("hidden");
+        haptic();
+    } catch {
+        cameraStarted = false;
+        Swal.fire('Kamera Ditolak', 'Izinkan kamera untuk absen', 'warning');
+    }
+}
+
+async function detectFace() {
+    if (!faceDetector) return true;
+    const faces = await faceDetector.detect(video);
+    return faces.length > 0;
+}
+
+/* ================= BUTTON ================= */
+function setupButtonLabel() {
+    if (!sudahAbsenIn) {
+        $("#btnText").text("ABSEN IN");
+        $("#btnCapture").addClass("bg-green-500").removeClass("bg-blue-500");
+    } else if (!sudahAbsenOut) {
+        $("#btnText").text("ABSEN OUT");
+        $("#btnCapture").addClass("bg-blue-500").removeClass("bg-green-500");
+    } else {
+        $("#btnCapture").addClass("hidden");
+    }
+}
+
+function resetButton() {
+    $("#btnCapture").prop("disabled", false).removeClass("btn-disabled");
+    $("#btnIcon").text("📸");
+    setupButtonLabel();
+}
+
+/* ================= ABSEN ================= */
+$("#btnCapture").on("click", async function () {
+
+    $("#btnCapture").prop("disabled", true).addClass("btn-disabled");
+    $("#btnIcon").text("⏳");
+    $("#btnText").text("MEMPROSES...");
+    haptic();
+
+    if (!lokasiReady) {
+        Swal.fire('Lokasi Belum Siap', 'Tunggu GPS aktif', 'warning');
+        resetButton(); return;
+    }
+
+    if (!await detectFace()) {
+        Swal.fire('Wajah Tidak Terdeteksi', 'Hadapkan wajah ke kamera', 'warning');
+        haptic("error"); resetButton(); return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+
+    $.post('/presensi/store', {
+        _token: "{{ csrf_token() }}",
+        image: canvas.toDataURL('image/jpeg',0.85),
+        lokasi: lokasi.value
+    }, function(res){
+        let status = res.split("|");
+        if (status[0]==="success") {
+            haptic("success");
+            status[2]==="in" ? notifikasi_in.play() : notifikasi_out.play();
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            Swal.fire('Berhasil', status[1], 'success');
+            setTimeout(()=>location.href='/dashboard',2000);
+        } else {
+            haptic("error");
+            Swal.fire('Gagal', status[1], 'error');
+            resetButton();
         }
+    });
+});
 
-        function jam() {
-            var e = document.getElementById('jam'),
-                d = new Date(),
-                h, m, s;
-            h = d.getHours();
-            m = set(d.getMinutes());
-            s = set(d.getSeconds());
+/* ================= SHIFT MODAL ================= */
+$("#btnKonfirmasiShift").on("click", ()=>$("#modalKonfirmasiShift").removeClass("hidden"));
+$("#btnSudahBenar").on("click", ()=>$("#modalKonfirmasiShift").addClass("hidden"));
+$("#btnBukaGantiShift").on("click", ()=>{
+    $("#modalKonfirmasiShift").addClass("hidden");
+    $("#modalGantiShift").removeClass("hidden");
+});
+$("#btnCloseModal").on("click", ()=>$("#modalGantiShift").addClass("hidden"));
 
-            e.innerHTML = h + ':' + m + ':' + s;
+/* ================= UTIL ================= */
+function hitungJarak(lat1, lon1, lat2, lon2) {
+    const R=6371000,toRad=x=>x*Math.PI/180;
+    const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+    const a=Math.sin(dLat/2)**2 +
+        Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*
+        Math.sin(dLon/2)**2;
+    return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+</script>
 
-            setTimeout('jam()', 1000);
-        }
-
-        function set(e) {
-            e = e < 10 ? '0' + e : e;
-            return e;
-        }
-
-        var notifikasi_in = document.getElementById('notifikasi_in');
-        var notifikasi_out = document.getElementById('notifikasi_out');
-        var radius_sound = document.getElementById('radius_sound');
-
-        Webcam.set({
-            width: 270,          // Lebar dikurangi untuk mobile (aspect 3:4)
-            height: 360,         // Tinggi dikurangi untuk mobile (aspect 3:4)
-            dest_width: 270,     // Pastikan output foto tetap 270px lebar
-            dest_height: 360,    // Pastikan output foto tetap 360px tinggi
-            image_format: 'jpeg',
-            jpeg_quality: 85,    // Sedikit dikurangi dari 90 untuk file lebih kecil di mobile
-            mobileAutoAdvance: true,
-            flip_horiz: true,
-            constraints: {       // Tambahkan constraints untuk aspect ratio di semua device, khusus mobile
-                video: {
-                    width: { ideal: 270 },
-                    height: { ideal: 360 },
-                    aspectRatio: { ideal: 3/4 },  // Paksa aspect ratio 3:4
-                    facingMode: 'user'  // Gunakan kamera depan di mobile
-                }
-            }
-        });
-        Webcam.attach('.fotoduls');
-
-        // Fallback untuk browser mobile lama
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert('Browser tidak mendukung webcam modern. Gunakan browser terbaru seperti Chrome atau Safari di mobile.');
-        }
-
-        // Tambahan untuk mobile: Deteksi orientasi dan beri peringatan jika landscape
-        window.addEventListener('orientationchange', function() {
-            if (window.orientation === 90 || window.orientation === -90) {
-                alert('Untuk hasil foto terbaik, gunakan orientasi portrait (tegak).');
-            }
-        });
-
-        var lokasi = document.getElementById('lokasi');
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(successCallback, errorCallback);
-        }
-
-        function successCallback(posisi) {
-            lokasi.value = posisi.coords.latitude + ',' + posisi.coords.longitude;
-            var map = L.map('map').setView([posisi.coords.latitude, posisi.coords.longitude], 15);
-
-            var lokasi_site = "{{ $lok_site->lokasi_cabang }}";
-            var lok = lokasi_site.split(",");
-            var lat_site = lok[0];
-            var long_site = lok[1];
-            var radius = {{ $lok_site->radius_cabang }};
-
-            googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs/m&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-            }).addTo(map);
-            var marker = L.marker([posisi.coords.latitude, posisi.coords.longitude]).addTo(map);
-            var circle = L.circle([lat_site, long_site], {
-                color: 'red',
-                fillColor: '#f03',
-                fillOpacity: 0.5,
-                radius: radius
-            }).addTo(map);
-        }
-
-        function errorCallback() {}
-
-        // take absen ajax
-        $("#takeabsen").click(function(e) {
-            // PERUBAHAN: Cek jika sudah absen out hari ini, tampilkan popup dan hentikan
-            if (@json($presensiHariIni && !is_null($presensiHariIni->jam_out))) {
-                Swal.fire({
-                    title: 'Sudah Absen!',
-                    text: 'Kamu sudah berhasil absen hari ini.',
-                    icon: 'info',
-                    confirmButtonText: 'OK'
-                });
-                return; // Hentikan eksekusi, jangan lanjutkan absen
-            }
-
-            // Lanjutkan logika absen seperti biasa
-            Webcam.snap(function(uri) {
-                image = uri;
-            });
-            var lokasi = $("#lokasi").val();
-            $.ajax({
-                type: 'POST',
-                url: '/presensi/store',
-                data: {
-                    _token: "{{ csrf_token() }}",
-                    image: image,
-                    lokasi: lokasi
-                },
-                cache: false,
-                success: function(respond) {
-                    var status = respond.split("|");
-                    if (status[0] == "success") {
-                        if (status[2] == "in") {
-                            notifikasi_in.play();
-                        } else {
-                            notifikasi_out.play()
-                        }
-                        Swal.fire({
-                            title: 'Berhasil !',
-                            text: status[1],
-                            icon: 'success',
-                            confirmButtonText: 'OK'
-                        })
-                        setTimeout("location.href='/dashboard'", 3000);
-                    } else {
-                        if (status[2] == "radius") {
-                            radius_sound.play();
-                        }
-                        Swal.fire({
-                            title: 'Tidak Berhasil !',
-                            text: status[1],
-                            icon: 'error',
-                            confirmButtonText: 'OK',
-                            footer: '<a href="/">Kembali ke Dashboard</a>'
-                        })
-                    }
-                }
-            });
-        });
-
-        // Tombol Konfirmasi Shift (di atas)
-        $("#btnKonfirmasiShift").click(function() {
-            $("#modalKonfirmasiShift").removeClass("hidden");
-        });
-
-        // Tombol di Modal Konfirmasi Shift
-        $("#btnSudahBenar").click(function() {
-            $("#modalKonfirmasiShift").addClass("hidden");
-            // User bisa langsung absen sekarang
-        });
-
-        $("#btnBukaGantiShift").click(function() {
-            $("#modalKonfirmasiShift").addClass("hidden");
-            $("#modalGantiShift").removeClass("hidden");
-        });
-
-        // Modal Ganti Shift
-        $("#btnCloseModal").click(function() {
-            $("#modalGantiShift").addClass("hidden");
-        });
-
-        // Submit form modal via AJAX
-        $("#formGantiShift").submit(function(e) {
-            e.preventDefault();
-            var kode_jam_kerja = $("#kode_jam_kerja").val();
-            $.ajax({
-                type: 'POST',
-                url: '/presensi/update-shift-ajax',
-                data: {
-                    _token: "{{ csrf_token() }}",
-                    kode_jam_kerja: kode_jam_kerja
-                },
-                success: function(response) {
-                    if (response.success) {
-                        Swal.fire({
-                            title: 'Berhasil!',
-                            text: response.success,
-                            icon: 'success',
-                            confirmButtonText: 'OK'
-                        });
-                        $("#modalGantiShift").addClass("hidden");
-                        setTimeout("location.reload()", 2000);
-                    } else {
-                        Swal.fire({
-                            title: 'Error!',
-                            text: response.error,
-                            icon: 'error',
-                            confirmButtonText: 'OK'
-                        });
-                    }
-                },
-                error: function() {
-                    Swal.fire({
-                        title: 'Error!',
-                        text: 'Terjadi kesalahan sistem.',
-                        icon: 'error',
-                        confirmButtonText: 'OK'
-                    });
-                }
-            });
-        });
-    </script>
-
-    <script>
-        // Modal konfirmasi shift muncul otomatis jika belum absen in hari ini
-        @if(!$presensiHariIni)  {{-- PERUBAHAN: Ganti dari @if($cek == 0) --}}
-            window.onload = function() {
-                jam();
-                $("#modalKonfirmasiShift").removeClass("hidden");
-            };
-        @else
-            window.onload = function() {
-                jam();
-            };
-        @endif
-    </script>
 @endpush
+
+
+
+

@@ -69,12 +69,12 @@ class DashboardController extends Controller
     public function index()
     {  
         $hariIni = date("Y-m-d");
-        $bulanIni = date("m") * 1; //1 atau Januari
-        $tahunIni = date('Y'); //2025
+        $bulanIni = date("m") * 1; // 1 atau Januari
+        $tahunIni = date('Y'); // 2025
         $jam = date("H:i:s"); // 16:20:25
         $nrp = Auth::guard('karyawan')->user()->nrp;
         
-        // PERUBAHAN: Hitung hari kerja aktif untuk presensi (sama seperti di PresensiController::create())
+        // Hitung hari kerja aktif untuk presensi (sama seperti di PresensiController::create())
         $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($hariIni)));
         $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
         
@@ -115,23 +115,25 @@ class DashboardController extends Controller
             }
         }
         
-        // PERUBAHAN: Ambil presensi berdasarkan hari kerja aktif
+        // Ambil presensi berdasarkan hari kerja aktif
         $presensiHariIni = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $activePresensiDate)->first();
         
+        // Data histori bulan ini untuk modal (sudah ada, tapi pastikan join lengkap)
         $historiBulanIni = DB::table('presensi')
             ->select('presensi.*','keterangan','jam_kerja.*','doc_cis','nama_cuti')
-            ->leftjoin ('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+            ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
             ->leftJoin('cis','presensi.kode_izin','=','cis.kode_izin')
-            ->leftJoin('master_cuti','cis.kode_izin','=','master_cuti.kode_cuti')
+            ->leftJoin('master_cuti','cis.kode_cuti','=','master_cuti.kode_cuti')  // Perbaikan: Join ke master_cuti berdasarkan kode_cuti, bukan kode_izin
             ->where('presensi.nrp', $nrp)
             ->whereRaw('MONTH(tgl_presensi)="' . $bulanIni . '"')
             ->whereRaw('YEAR(tgl_presensi)="' . $tahunIni . '"')
             ->orderBy('tgl_presensi')
             ->get();
         
+        // Rekap presensi bulan ini
         $rekapPresensi = DB::table('presensi')
             ->selectRaw('COUNT(nrp) as totHadir, SUM(IF(jam_in > jam_masuk ,1,0)) as totLate' )
-            ->leftjoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+            ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
             ->where('nrp', $nrp)
             ->whereRaw('MONTH(tgl_presensi)="' . $bulanIni . '"')
             ->whereRaw('YEAR(tgl_presensi)="' . $tahunIni . '"')
@@ -139,6 +141,7 @@ class DashboardController extends Controller
 
         $namaBulan = ["","Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November","Desember"];
         
+        // Rekap CIS bulan ini
         $rekapCis = DB::table('cis')
             ->selectRaw('SUM(IF(status="i",1,0)) as jmlIzin,SUM(IF(status="s",1,0)) as jmlSakit')
             ->where('nrp',$nrp)
@@ -146,9 +149,12 @@ class DashboardController extends Controller
             ->whereRaw('YEAR(tgl_izin_dari)="' . $tahunIni . '"')
             ->where('status_approved',1)
             ->first();
-        return view("dashboard.dashboard", compact('presensiHariIni' , 'historiBulanIni', 'namaBulan', 'bulanIni', 'tahunIni', 'rekapPresensi','rekapCis'));
+
+        // Kirim semua data ke view
+        return view("dashboard.dashboard", compact('presensiHariIni', 'historiBulanIni', 'namaBulan', 'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis'));
     }
 
+    // Method dashboardadmin() tetap sama, tidak perlu perubahan
     public function dashboardadmin(){
         $totalUsers = DB::table('karyawan')->count();
         $hariIni = date("Y-m-d");
