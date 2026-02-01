@@ -72,7 +72,7 @@
     {{-- LOKASI --}}
     <td>
         <a href="#" class="btn btn-sm btn-primary location" id="{{ $d->id }}">
-            📍
+            Detail Lokasi
         </a>
     </td>
 </tr>
