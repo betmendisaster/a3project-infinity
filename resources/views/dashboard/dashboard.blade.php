@@ -121,40 +121,41 @@
                         class="relative bg-slate-200 text-black rounded-lg p-2 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-slate-600 hover:text-white transition duration-300 shadow-md">
                         <ion-icon name="pie-chart-outline" class="text-2xl"></ion-icon>
                         <span
-                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{{ $rekapPresensi->totHadir }}</span>
+                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {{ $rekapPresensi->totHadir ?? 0 }}
+                        </span>
                         <p class="font-semibold text-xs mt-1">Hadir</p>
                     </div>
                     <div
                         class="relative bg-slate-200 text-black rounded-lg p-2 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-slate-600 hover:text-white transition duration-300 shadow-md">
                         <ion-icon name="document-text-outline" class="text-2xl"></ion-icon>
                         <span
-                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{{ $rekapCis->jmlIzin }}</span>
+                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {{ $rekapCis->jmlIzin ?? 0 }}
+                        </span>
                         <p class="font-semibold text-xs mt-1">Izin</p>
                     </div>
                     <div
                         class="relative bg-slate-200 text-black rounded-lg p-2 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-slate-600 hover:text-white transition duration-300 shadow-md">
                         <ion-icon name="medkit-outline" class="text-2xl"></ion-icon>
                         <span
-                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{{ $rekapCis->jmlSakit }}</span>
+                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {{ $rekapCis->jmlSakit ?? 0 }}
+                        </span>
                         <p class="font-semibold text-xs mt-1">Sakit</p>
                     </div>
                     <div
                         class="relative bg-gray-200 text-black rounded-lg p-2 flex flex-col items-center w-1/5 mx-1 cursor-pointer hover:bg-gray-800 hover:text-white transition duration-300 shadow-md">
                         <ion-icon name="timer-outline" class="text-2xl"></ion-icon>
                         <span
-                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{{ $rekapPresensi->totLate }}</span>
+                            class="absolute top-0 right-0 inline-flex items-center justify-center px-1 py-0.5 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                            {{ $rekapPresensi->totLate ?? 0 }}
+                        </span>
                         <p class="font-semibold text-xs mt-1">Telat</p>
                     </div>
                 </div>
             </div>
-            <!-- Hasil Absen -->
-            {{-- <div class="bg-gray-200 text-black rounded-lg p-1 flex items-center justify-center w-full mx-1 cursor-pointer hover:bg-gray-800 hover:text-white transition duration-300 shadow-md mt-4"
-                id="openHasilAbsen">
-                <ion-icon name="bookmarks-outline"></ion-icon>
-                <div class="flex flex-col items-center">
-                    <p class="text-md ml-2 font-semibold">Hasil Absensi</p>
-                </div>
-            </div> --}}
+
         </div>
         @include('dashboard.modalDashboard')
 

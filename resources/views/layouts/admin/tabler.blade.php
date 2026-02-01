@@ -63,6 +63,9 @@
     <script src="{{ asset('tabler/dist/js/demo.min.js?1692870487') }}" defer></script>
     {{-- Jquery --}}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <!-- Tabler Core -->
+    <script src="{{ asset('tabler/dist/js/tabler.min.js?1692870487') }}" defer></script>
+    <script src="{{ asset('tabler/dist/js/demo.min.js?1692870487') }}" defer></script>
     {{-- Sweetalert2 --}}
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     {{-- Datepicker --}}
@@ -70,7 +73,8 @@
     {{-- Leaflet JS --}}
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    @stack('myscript')
+
+    @yield('scripts')
 </body>
 
 </html>

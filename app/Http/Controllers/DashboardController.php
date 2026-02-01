@@ -2,22 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Karyawan;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    /**
-     * Menghitung waktu timeout berdasarkan akhir_jam_pulang dikurangi 2 jam.
-     * Timeout digunakan untuk menentukan kapan shift dianggap selesai tanpa jam_out,
-     * sehingga bugar selamat beralih ke hari ini lebih awal.
-     *
-     * @param string $akhirJamPulang Waktu akhir jam pulang dalam format "H:i:s" (misal "05:00:00").
-     * @param bool $isShiftMalam True jika shift malam (jam_pulang < jam_masuk), false jika normal.
-     * @return string|null Waktu timeout dalam format "H:i:s" (misal "03:00:00"), atau null jika error.
-     */
     private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
         if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
             \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
@@ -26,148 +15,205 @@ class DashboardController extends Controller
 
         try {
             $timestampAkhir = strtotime($akhirJamPulang);
-            if ($timestampAkhir === false) {
-                \Log::error("Gagal mengkonversi akhirJamPulang ke timestamp: $akhirJamPulang");
-                return null;
-            }
+            if ($timestampAkhir === false) return null;
 
             $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
-            if ($timestampTimeout === false) {
-                \Log::error("Gagal menghitung timeout untuk akhirJamPulang: $akhirJamPulang");
-                return null;
-            }
+            if ($timestampTimeout === false) return null;
 
-            $timeoutTime = date("H:i:s", $timestampTimeout);
-            \Log::info("Timeout calculated: akhirJamPulang=$akhirJamPulang, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime");
-            return $timeoutTime;
+            return date("H:i:s", $timestampTimeout);
         } catch (\Exception $e) {
             \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
             return null;
         }
     }
 
-    /**
-     * Mengembalikan nama hari dalam bahasa Indonesia berdasarkan string tanggal.
-     *
-     * @param string $dateString Tanggal dalam format "Y-m-d".
-     * @return string Nama hari (misal "Senin").
-     */
     private function getHariFromDate($dateString) {
         $day = date("D", strtotime($dateString));
-        switch ($day) {
-            case 'Sun': return "Minggu";
-            case 'Mon': return "Senin";
-            case 'Tue': return "Selasa";
-            case 'Wed': return "Rabu";
-            case 'Thu': return "Kamis";
-            case 'Fri': return "Jumat";
-            case 'Sat': return "Sabtu";
-            default: return "Tidak di Ketahui";
-        }
+        return match($day) {
+            'Sun' => 'Minggu',
+            'Mon' => 'Senin',
+            'Tue' => 'Selasa',
+            'Wed' => 'Rabu',
+            'Thu' => 'Kamis',
+            'Fri' => 'Jumat',
+            'Sat' => 'Sabtu',
+            default => 'Tidak di Ketahui',
+        };
     }
 
     public function index()
-    {  
+    {
         $hariIni = date("Y-m-d");
-        $bulanIni = date("m") * 1; // 1 atau Januari
-        $tahunIni = date('Y'); // 2025
-        $jam = date("H:i:s"); // 16:20:25
+        $bulanIni = (int) date("m");
+        $tahunIni = date("Y");
+        $jam = date("H:i:s");
         $nrp = Auth::guard('karyawan')->user()->nrp;
-        
-        // Hitung hari kerja aktif untuk presensi (sama seperti di PresensiController::create())
+
+        // ===========================
+        // Mengecek presensi kemarin
+        // ===========================
         $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($hariIni)));
-        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
-        
+        $cekKemarin = DB::table('presensi')
+            ->where('tgl_presensi', $kemarin)
+            ->where('nrp', $nrp)
+            ->whereNull('jam_out')
+            ->count();
+
         $isTimeout = false;
-        $activePresensiDate = $hariIni; // Default: hari ini
-        
+        $activePresensiDate = $hariIni;
+
         if ($cekKemarin > 0) {
             $namahariKemarin = $this->getHariFromDate($kemarin);
+
             $jamKerjaKemarin = DB::table('settings_jam_kerja')
                 ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
                 ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
-            if ($jamKerjaKemarin == null) {
+
+            if (!$jamKerjaKemarin) {
                 $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
                     ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
                     ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)
+                    ->where('hari',$namahariKemarin)
+                    ->first();
             }
-            
+
             if ($jamKerjaKemarin) {
                 $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
                 $jamMasuk = $jamKerjaKemarin->jam_masuk;
                 $jamPulang = $jamKerjaKemarin->jam_pulang;
                 $isShiftMalam = ($jamPulang < $jamMasuk);
-                
+
                 $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
-                
+
                 if ($timeoutTime !== null) {
                     if ($isShiftMalam) {
                         $isTimeout = ($jam > $timeoutTime);
                     } else {
-                        $isTimeout = true; // Hari kemarin sudah lewat
+                        $isTimeout = true;
                     }
                 }
-                
+
                 if (!$isTimeout) {
-                    $activePresensiDate = $kemarin; // Gunakan kemarin jika belum timeout
+                    $activePresensiDate = $kemarin;
                 }
             }
         }
-        
-        // Ambil presensi berdasarkan hari kerja aktif
-        $presensiHariIni = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $activePresensiDate)->first();
-        
-        // Data histori bulan ini untuk modal (sudah ada, tapi pastikan join lengkap)
+
+        // ===========================
+        // Ambil presensi hari aktif
+        // ===========================
+        $presensiHariIni = DB::table('presensi')
+            ->where('nrp', $nrp)
+            ->where('tgl_presensi', $activePresensiDate)
+            ->first();
+
+        // ===========================
+        // Histori presensi bulan ini
+        // ===========================
         $historiBulanIni = DB::table('presensi')
-            ->select('presensi.*','keterangan','jam_kerja.*','doc_cis','nama_cuti')
+            ->select('presensi.*','jam_kerja.*')
             ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-            ->leftJoin('cis','presensi.kode_izin','=','cis.kode_izin')
-            ->leftJoin('master_cuti','cis.kode_cuti','=','master_cuti.kode_cuti')  // Perbaikan: Join ke master_cuti berdasarkan kode_cuti, bukan kode_izin
             ->where('presensi.nrp', $nrp)
-            ->whereRaw('MONTH(tgl_presensi)="' . $bulanIni . '"')
-            ->whereRaw('YEAR(tgl_presensi)="' . $tahunIni . '"')
+            ->whereMonth('tgl_presensi', $bulanIni)
+            ->whereYear('tgl_presensi', $tahunIni)
             ->orderBy('tgl_presensi')
             ->get();
-        
+
+        // ===========================
         // Rekap presensi bulan ini
+        // ===========================
         $rekapPresensi = DB::table('presensi')
-            ->selectRaw('COUNT(nrp) as totHadir, SUM(IF(jam_in > jam_masuk ,1,0)) as totLate' )
+            ->selectRaw('COUNT(nrp) as totHadir, SUM(IF(jam_in > jam_masuk ,1,0)) as totLate')
             ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
             ->where('nrp', $nrp)
-            ->whereRaw('MONTH(tgl_presensi)="' . $bulanIni . '"')
-            ->whereRaw('YEAR(tgl_presensi)="' . $tahunIni . '"')
+            ->whereMonth('tgl_presensi', $bulanIni)
+            ->whereYear('tgl_presensi', $tahunIni)
             ->first();
 
-        $namaBulan = ["","Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November","Desember"];
-        
-        // Rekap CIS bulan ini
+        // ===========================
+        // Rekap Cuti/Izin/Sakit bulan ini
+        // ===========================
         $rekapCis = DB::table('cis')
-            ->selectRaw('SUM(IF(status="i",1,0)) as jmlIzin,SUM(IF(status="s",1,0)) as jmlSakit')
-            ->where('nrp',$nrp)
-            ->whereRaw('MONTH(tgl_izin_dari)="' . $bulanIni . '"')
-            ->whereRaw('YEAR(tgl_izin_dari)="' . $tahunIni . '"')
-            ->where('status_approved',1)
-            ->first();
+        ->selectRaw('
+            SUM(CASE WHEN status = "I" THEN 1 ELSE 0 END) as jmlIzin,
+            SUM(CASE WHEN status = "S" THEN 1 ELSE 0 END) as jmlSakit
+        ')
+        ->where('nrp', $nrp)
+        ->whereMonth('tgl_izin_dari', $bulanIni)
+        ->whereYear('tgl_izin_dari', $tahunIni)
+        ->first();
 
-        // Kirim semua data ke view
-        return view("dashboard.dashboard", compact('presensiHariIni', 'historiBulanIni', 'namaBulan', 'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis'));
+        // ===========================
+        // Array nama bulan
+        // ===========================
+        $namaBulan = [
+            1 => "Januari", 2 => "Februari", 3 => "Maret", 4 => "April", 
+            5 => "Mei", 6 => "Juni", 7 => "Juli", 8 => "Agustus", 
+            9 => "September", 10 => "Oktober", 11 => "November", 12 => "Desember"
+        ];
+
+        return view("dashboard.dashboard", compact(
+            'presensiHariIni', 'historiBulanIni', 'namaBulan', 
+            'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis'
+        ));
     }
 
-    // Method dashboardadmin() tetap sama, tidak perlu perubahan
-    public function dashboardadmin(){
+    public function dashboardadmin()
+    {
         $totalUsers = DB::table('karyawan')->count();
+        $bulanIni = (int) date("m");
+        $tahunIni = (int) date("Y");
         $hariIni = date("Y-m-d");
+
+        // Rekap Kehadiran Hari Ini
         $rekapPresensi = DB::table('presensi')
-            ->selectRaw('COUNT(nrp) as totHadir, SUM(IF(jam_in > "06:50",1,0)) as totLate' )
-            ->where('tgl_presensi',$hariIni)
+            ->selectRaw('COUNT(nrp) as totHadir, SUM(IF(jam_in > "06:50",1,0)) as totLate')
+            ->where('tgl_presensi', $hariIni)
             ->first();
 
-        $rekapCis = DB::table('cis')
-        ->selectRaw('SUM(IF(status="i",1,0)) as jmlIzin,SUM(IF(status="s",1,0)) as jmlSakit')
-        ->where('tgl_izin_dari',$hariIni)
-        ->where('status_approved',1)
-        ->first();
-        return view('dashboard.dashboardadmin', compact('rekapPresensi', 'totalUsers','rekapCis'));
+        // Data tren kehadiran bulanan (total hadir per hari)
+        $historiBulanIni = DB::table('presensi')
+            ->selectRaw('tgl_presensi, COUNT(nrp) as totHadir')
+            ->whereMonth('tgl_presensi', $bulanIni)
+            ->whereYear('tgl_presensi', $tahunIni)
+            ->groupBy('tgl_presensi')
+            ->orderBy('tgl_presensi')
+            ->get();
+
+        // Membuat array labels dan values untuk Chart.js
+        $labels = [];
+        $values = [];
+        $historiAssoc = $historiBulanIni->keyBy(function($item) {
+            return date('Y-m-d', strtotime($item->tgl_presensi));
+        });
+
+        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $bulanIni, $tahunIni);
+
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $date = sprintf('%04d-%02d-%02d', $tahunIni, $bulanIni, $d);
+            $hari = date('D', strtotime($date));
+
+            $namaHari = match($hari) {
+                'Sun' => 'Minggu',
+                'Mon' => 'Sen',
+                'Tue' => 'Sel',
+                'Wed' => 'Rab',
+                'Thu' => 'Kam',
+                'Fri' => 'Jum',
+                'Sat' => 'Sab',
+                default => ''
+            };
+
+            $labels[] = date('j M', strtotime($date)) . " ($namaHari)";
+            $values[] = $historiAssoc[$date]->totHadir ?? 0;
+        }
+
+        return view('dashboard.dashboardadmin', compact(
+            'totalUsers',
+            'rekapPresensi',
+            'labels',
+            'values'
+        ));
     }
 }
