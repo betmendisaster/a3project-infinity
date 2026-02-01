@@ -18,8 +18,11 @@
             left: 0;
             width: 100% !important;
             height: 100% !important;
-            object-fit: cover;  /* Pastikan video memenuhi area tanpa distorsi */
+            object-fit: cover;
             border-radius: 15px;
+
+            /* ⬇️ TAMBAHAN INI */
+            transform: scaleX(-1);
         }
 
         #map {
