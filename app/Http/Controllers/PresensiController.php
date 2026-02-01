@@ -188,83 +188,106 @@ class PresensiController extends Controller
         }   
     }
 
-    public function store (Request $request){
+    public function store(Request $request)
+    {
         $nrp = Auth::guard('karyawan')->user()->nrp;
         $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
         $tgl_presensi = date("Y-m-d");
         $jam = date("H:i:s");
         $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
-        // LOKASI 1
-        $lok_site = DB::table('cabang')->where('kode_cabang',$kode_cabang)->first();
-        $lok = explode(",",$lok_site->lokasi_cabang);
+
+        // LOKASI 1 (Utama)
+        $lok_site = DB::table('cabang')->where('kode_cabang', $kode_cabang)->first();
+        $lok = explode(",", $lok_site->lokasi_cabang);
         $latitudeSite = $lok[0];
         $longitudeSite = $lok[1];
         $lokasi = $request->lokasi;
-        $lokasiUser = explode("," , $lokasi);
+        $lokasiUser = explode(",", $lokasi);
         $latitudeUser = $lokasiUser[0];
         $longitudeUser = $lokasiUser[1];
 
-        $jarak  = $this->distance($latitudeSite, $longitudeSite, $latitudeUser, $longitudeUser);
-        $radius = round($jarak['meters']);
-        // CEK SHIFT KERJA KARYAWAN
-        $namahari = $this->getHari();
-        $jamKerja = DB::table('settings_jam_kerja')
-            ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-            ->where('nrp',$nrp)->where('hari',$namahari)->first();
-        
-        if($jamKerja == null){
-            $jamKerja = DB::table('settings_jk_dept_detail')
-                ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
-                ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                ->where('kode_dept',$kode_dept)->where('hari',$namahari)->first();
+        $jarak1 = $this->distance($latitudeSite, $longitudeSite, $latitudeUser, $longitudeUser);
+        $radius1 = round($jarak1['meters']);
+
+        // LOKASI 2 (Opsional, jika ada)
+        $isValidLocation = false;
+        $radius2 = null;
+        if ($lok_site->lokasi2_cabang) {
+            $lok2 = explode(",", $lok_site->lokasi2_cabang);
+            $latitudeSite2 = $lok2[0];
+            $longitudeSite2 = $lok2[1];
+            $jarak2 = $this->distance($latitudeSite2, $longitudeSite2, $latitudeUser, $longitudeUser);
+            $radius2 = round($jarak2['meters']);
+            if ($radius2 <= $lok_site->radius_cabang) {
+                $isValidLocation = true;
+            }
+        }
+
+        // Cek apakah dalam radius salah satu lokasi
+        if ($radius1 > $lok_site->radius_cabang && !$isValidLocation) {
+            $errorMsg = "Maaf anda berada diluar radius absensi, jarak anda adalah " . $radius1 . " Meter dari lokasi utama";
+            if ($radius2 !== null) {
+                $errorMsg .= " dan " . $radius2 . " Meter dari lokasi kedua";
+            }
+            $errorMsg .= " dari lokasi absensi|radius";
+            echo "error|" . $errorMsg;
+        } else {
+            // CEK SHIFT KERJA KARYAWAN
+            $namahari = $this->getHari();
+            $jamKerja = DB::table('settings_jam_kerja')
+                ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                ->where('nrp', $nrp)->where('hari', $namahari)->first();
+
+            if ($jamKerja == null) {
+                $jamKerja = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', $kode_dept)->where('hari', $namahari)->first();
             }
 
-        // Ubah: Ambil data presensi lengkap
-        $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->first();
-        
-        $image = $request->image;
-        // mengubah folder default ada di config/filesystems.php
-        $folderPath = "uploads/absensi/";
-        $formatName = $nrp . "-" . $tgl_presensi ."-". ($cek ? "out" : "in");
-        $image_parts = explode(";base64" ,$image);
-        $image_base64 = base64_decode($image_parts[1]);
-        $fileName = $formatName . ".png";
-        $file = $folderPath . $fileName;
-    
-        if($radius > $lok_site->radius_cabang){
-            echo "error|Maaf anda berada diluar radius absensi, jarak anda adalah ".$radius." Meter dari lokasi absensi|radius";
-        }else {
-            if($cek){
+            // Ubah: Ambil data presensi lengkap
+            $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->first();
+
+            $image = $request->image;
+            // mengubah folder default ada di config/filesystems.php
+            $folderPath = "uploads/absensi/";
+            $formatName = $nrp . "-" . $tgl_presensi . "-" . ($cek ? "out" : "in");
+            $image_parts = explode(";base64", $image);
+            $image_base64 = base64_decode($image_parts[1]);
+            $fileName = $formatName . ".png";
+            $file = $folderPath . $fileName;
+
+            if ($cek) {
                 // Tambahan: Cek apakah jam_out sudah ada
                 if (!is_null($cek->jam_out)) {
                     echo "error|Anda sudah absen out hari ini. Shift sudah selesai.|out";
                 } else {
                     // PERUBAHAN: Tambahkan validasi awal dan akhir jam pulang
-                    if($jam < $jamKerja->awal_jam_pulang){ // BARU: Belum waktunya absen out
+                    if ($jam < $jamKerja->awal_jam_pulang) { // BARU: Belum waktunya absen out
                         echo "error|Belum Waktunya Melakukan Absen Out|out";
-                    } elseif($jam > $jamKerja->akhir_jam_pulang){ // BARU: Sudah terlambat absen out
+                    } elseif ($jam > $jamKerja->akhir_jam_pulang) { // BARU: Sudah terlambat absen out
                         echo "error|Waktu Absen Out Sudah Habis|out";
                     } else {
-                        $data_pulang= [
+                        $data_pulang = [
                             'jam_out' => $jam,
                             'foto_out' => $fileName,
                             'lokasi_out' => $lokasi
                         ];
-                        $update = DB::table('presensi')->where('tgl_presensi',$tgl_presensi)->where('nrp',$nrp)->update($data_pulang); 
+                        $update = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->update($data_pulang);
                         if ($update) {
                             echo "success|Terimakasih, Selamat Beristirahat, Hati - Hati di Jalan~|out";
                             Storage::put($file, $image_base64);
-                        }else {
+                        } else {
                             echo "error|Maaf absen gagal, silahkan hubungi tim IT|out";
                         }
-                    }              
+                    }
                 }
             } else {
-                if ($jam < $jamKerja->awal_jam_masuk){
+                if ($jam < $jamKerja->awal_jam_masuk) {
                     echo "error|Belum Waktunya Melakukan Presensi|in";
-                } else if($jam >$jamKerja->akhir_jam_masuk){
+                } elseif ($jam > $jamKerja->akhir_jam_masuk) {
                     echo "error|Waktu Untuk Take Absen In Sudah Habis|in";
-                } else{
+                } else {
                     $data = [
                         'nrp' => $nrp,
                         'tgl_presensi' => $tgl_presensi,
@@ -278,7 +301,7 @@ class PresensiController extends Controller
                     if ($simpan) {
                         echo "success|Terimakasih, Selamat Bekerja~|in";
                         Storage::put($file, $image_base64);
-                    }else {
+                    } else {
                         echo "error|Maaf absen gagal, silahkan hubungi tim IT|in";
                     }
                 }
@@ -425,87 +448,19 @@ class PresensiController extends Controller
         return view ('layouts.presensi.monitoring');
     }
 
-    public function getPresensi(Request $request)
-    {
+    public function getPresensi(Request $request){
         $tanggal = $request->tanggal;
-        $besok   = date('Y-m-d', strtotime('+1 day', strtotime($tanggal)));
-
-        $mapHari = [
-            'monday'    => 'senin',
-            'tuesday'   => 'selasa',
-            'wednesday' => 'rabu',
-            'thursday'  => 'kamis',
-            'friday'    => 'jumat',
-            'saturday'  => 'sabtu',
-            'sunday'    => 'minggu',
-        ];
-
-        $hari = $mapHari[strtolower(date('l', strtotime($tanggal)))];
-
         $presensi = DB::table('presensi')
-            ->join('karyawan', 'presensi.nrp', '=', 'karyawan.nrp')
+        ->select('presensi.*','nama','karyawan.kode_dept','jam_masuk','nama_jam_kerja','jam_masuk','jam_pulang','keterangan')
+        ->leftJoin('jam_kerja','presensi.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+        ->leftJoin('cis','presensi.kode_izin','=','cis.kode_izin')
+        ->join('karyawan','presensi.nrp','=','karyawan.nrp')
+        ->join('department','karyawan.kode_dept','=','department.kode_dept')
+        ->where('tgl_presensi',$tanggal)
+        ->get();
 
-            // JAM KERJA PERSONAL
-            ->leftJoin('settings_jam_kerja as sjk', function ($join) use ($hari) {
-                $join->on('karyawan.nrp', '=', 'sjk.nrp')
-                    ->where('sjk.hari', $hari);
-            })
-
-            // JAM KERJA DEPT
-            ->leftJoin('settings_jk_dept', 'karyawan.kode_dept', '=', 'settings_jk_dept.kode_dept')
-            ->leftJoin('settings_jk_dept_detail as sjdd', function ($join) use ($hari) {
-                $join->on('settings_jk_dept.kode_jk_dept', '=', 'sjdd.kode_jk_dept')
-                    ->where('sjdd.hari', $hari);
-            })
-
-            // PRIORITAS JAM KERJA (PERSONAL > DEPT)
-            ->leftJoin('jam_kerja', function ($join) {
-                $join->on(
-                    DB::raw('COALESCE(sjk.kode_jam_kerja, sjdd.kode_jam_kerja)'),
-                    '=',
-                    'jam_kerja.kode_jam_kerja'
-                );
-            })
-
-            ->leftJoin('master_cuti', 'presensi.kode_izin', '=', 'master_cuti.kode_cuti')
-
-            // FILTER TANGGAL + SHIFT (AMAN NULL)
-            ->where(function ($q) use ($tanggal, $besok) {
-
-                // TIDAK ADA JAM KERJA
-                $q->whereNull('jam_kerja.kode_jam_kerja')
-                ->whereDate('presensi.tgl_presensi', $tanggal)
-
-                // SHIFT NORMAL
-                ->orWhere(function ($q2) use ($tanggal) {
-                    $q2->whereNotNull('jam_kerja.kode_jam_kerja')
-                    ->whereRaw('jam_kerja.jam_masuk <= jam_kerja.jam_pulang')
-                    ->whereDate('presensi.tgl_presensi', $tanggal);
-                })
-
-                // SHIFT MALAM
-                ->orWhere(function ($q2) use ($tanggal, $besok) {
-                    $q2->whereNotNull('jam_kerja.kode_jam_kerja')
-                    ->whereRaw('jam_kerja.jam_masuk > jam_kerja.jam_pulang')
-                    ->whereIn('presensi.tgl_presensi', [$tanggal, $besok]);
-                });
-            })
-
-            ->select(
-                'presensi.*',
-                'karyawan.nama',
-                'karyawan.kode_dept',
-                'jam_kerja.nama_jam_kerja',
-                'jam_kerja.jam_masuk',
-                'jam_kerja.jam_pulang',
-                'master_cuti.nama_cuti'
-            )
-            ->orderBy('karyawan.nama')
-            ->get();
-
-        return view('layouts.presensi.getPresensi', compact('presensi'))->render();
+        return view('layouts.presensi.getPresensi',compact('presensi'));
     }
-
 
     public function showLocation(Request $request) {
         $id = $request->id;
@@ -1047,39 +1002,51 @@ class PresensiController extends Controller
     //     return view('layouts.presensi.gantiShift', compact('jamKerja', 'currentShift', 'hariSekarang','tanggalSekarang'));
     // }
 
-    public function updateShiftAjax(Request $request){
+    public function updateShiftAjax(Request $request)
+    {
         $nrp = Auth::guard('karyawan')->user()->nrp;
         $today = date("Y-m-d");
         $hariSekarang = $this->getHari();
 
         // Cek apakah sudah absen "in" hari ini
         $cek = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->count();
-        if($cek > 0){
+        if ($cek > 0) {
             return response()->json(['error' => 'Anda sudah absen hari ini, tidak bisa ganti shift.'], 400);
         }
 
         $kode_jam_kerja = $request->kode_jam_kerja;
 
         // Validasi input
-        if(empty($kode_jam_kerja)){
+        if (empty($kode_jam_kerja)) {
             return response()->json(['error' => 'Pilih shift untuk hari ini.'], 400);
+        }
+
+        // Cek apakah kode_jam_kerja valid
+        $jamKerjaExists = DB::table('jam_kerja')->where('kode_jam_kerja', $kode_jam_kerja)->exists();
+        if (!$jamKerjaExists) {
+            return response()->json(['error' => 'Shift tidak valid.'], 400);
         }
 
         DB::beginTransaction();
         try {
             // Hapus setting lama untuk hari ini (jika ada)
             DB::table('settings_jam_kerja')->where('nrp', $nrp)->where('hari', $hariSekarang)->delete();
+
             // Insert setting baru untuk hari ini
             DB::table('settings_jam_kerja')->insert([
                 'nrp' => $nrp,
                 'hari' => $hariSekarang,
                 'kode_jam_kerja' => $kode_jam_kerja
             ]);
+
             DB::commit();
-            return response()->json(['success' => 'Shift untuk hari ini berhasil diganti.']);
+
+            // Reload halaman atau kirim response sukses
+            return response()->json(['success' => 'Shift untuk hari ini berhasil diganti. Silakan refresh halaman untuk melihat perubahan.']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Gagal mengganti shift.'], 500);
+            \Log::error("Error ganti shift: " . $e->getMessage()); // Log untuk debug
+            return response()->json(['error' => 'Gagal mengganti shift. Coba lagi.'], 500);
         }
     }
 }

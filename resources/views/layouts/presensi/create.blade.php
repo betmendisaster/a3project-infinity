@@ -198,6 +198,7 @@
     </div>
 @endsection
 
+{{-- Bagian @push('myscript') di view create.blade.php --}}
 @push('myscript')
 <script>
 /* ================= STATUS ABSEN ================= */
@@ -261,7 +262,7 @@ function startGeofenceRealtime() {
     watchId = navigator.geolocation.watchPosition(
         successRealtime,
         () => Swal.fire('GPS Gagal', 'Aktifkan GPS & coba lagi', 'error'),
-        { enableHighAccuracy:true, maximumAge:0, timeout:10000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
 }
 
@@ -275,16 +276,32 @@ function successRealtime(pos) {
     let radius = {{ $lok_site->radius_cabang }};
     let jarak = hitungJarak(currentLat, currentLng, site[0], site[1]);
 
+    // Cek lokasi2 jika ada
+    let site2 = null;
+    let jarak2 = null;
+    @if($lok_site->lokasi2_cabang)
+        site2 = "{{ $lok_site->lokasi2_cabang }}".split(",");
+        jarak2 = hitungJarak(currentLat, currentLng, site2[0], site2[1]);
+    @endif
+
     if (!mapAbsensi) {
         mapAbsensi = L.map('map').setView([currentLat, currentLng], 16);
         L.tileLayer(
             'http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-            { maxZoom:20, subdomains:['mt0','mt1','mt2','mt3'] }
+            { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }
         ).addTo(mapAbsensi);
 
+        // Circle untuk lokasi utama
         L.circle([site[0], site[1]], {
-            color:'red', fillColor:'#f03', fillOpacity:0.3, radius:radius
+            color: 'red', fillColor: '#f03', fillOpacity: 0.3, radius: radius
         }).addTo(mapAbsensi);
+
+        // Circle untuk lokasi2 jika ada
+        @if($lok_site->lokasi2_cabang)
+            L.circle([site2[0], site2[1]], {
+                color: 'blue', fillColor: '#03f', fillOpacity: 0.3, radius: radius
+            }).addTo(mapAbsensi);
+        @endif
     }
 
     if (!markerUser) {
@@ -294,14 +311,18 @@ function successRealtime(pos) {
     }
 
     /* ===== GEOFENCE LIVE ===== */
-    if (jarak <= radius) {
+    let isInRadius = jarak <= radius;
+    @if($lok_site->lokasi2_cabang)
+        isInRadius = isInRadius || (jarak2 <= radius);
+    @endif
+
+    if (isInRadius) {
         $("#btnCapture").prop("disabled", false).removeClass("btn-disabled");
     } else {
         $("#btnCapture").prop("disabled", true).addClass("btn-disabled");
         haptic("error");
     }
 }
-
 /* ================= CAMERA AUTO ================= */
 let video = document.getElementById('video');
 let canvas = document.getElementById('canvas');
@@ -402,6 +423,20 @@ $("#btnBukaGantiShift").on("click", ()=>{
 });
 $("#btnCloseModal").on("click", ()=>$("#modalGantiShift").addClass("hidden"));
 
+// Tambahan: Handler untuk submit form ganti shift
+$("#formGantiShift").on("submit", function(e) {
+    e.preventDefault();
+    $.post('/presensi/update-shift-ajax', $(this).serialize(), function(res) {
+        if (res.success) {
+            Swal.fire('Berhasil', res.success, 'success').then(() => location.reload()); // Reload untuk update shift
+        } else {
+            Swal.fire('Gagal', res.error, 'error');
+        }
+    }).fail(function() {
+        Swal.fire('Error', 'Terjadi kesalahan jaringan.', 'error');
+    });
+});
+
 /* ================= UTIL ================= */
 function hitungJarak(lat1, lon1, lat2, lon2) {
     const R=6371000,toRad=x=>x*Math.PI/180;
@@ -412,9 +447,7 @@ function hitungJarak(lat1, lon1, lat2, lon2) {
     return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 </script>
-
 @endpush
-
 
 
 

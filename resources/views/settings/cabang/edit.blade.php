@@ -53,6 +53,18 @@
         <input type="text" value="{{ $cabang->lokasi_cabang }}" class="form-control"
             placeholder="Area Lokasi Presensi Cabang" name="lokasi_cabang" id="lokasi_cabang">
     </div>
+    {{-- LOKASI AREA CABANG 2 (Opsional untuk Double Lokasi) --}}
+    <div class="input-icon mb-3">
+        <span class="input-icon-addon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-pin">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4" />
+                <path d="M9 15l-4.5 4.5" />
+                <path d="M14.5 4l5.5 5.5" />
+            </svg>
+        </span>
+        <input type="text" value="{{ $cabang->lokasi2_cabang ?? '' }}" class="form-control" placeholder="Lokasi Cabang 2 (Opsional)" name="lokasi2_cabang" id="lokasi2_cabang">
+    </div>
     {{-- RADIUS AREA CABANG --}}
     <div class="input-icon mb-3">
         <span class="input-icon-addon">
@@ -86,10 +98,10 @@
             var kode_cabang = $('#frmCabangEdit').find('#kode_cabang').val();
             var nama_cabang = $('#frmCabangEdit').find('#nama_cabang').val();
             var lokasi_cabang = $('#frmCabangEdit').find('#lokasi_cabang').val();
+            var lokasi2_cabang = $('#frmCabangEdit').find('#lokasi2_cabang').val(); // Tambahkan validasi jika perlu, tapi opsional
             var radius_cabang = $('#frmCabangEdit').find('#radius_cabang').val();
 
             if (kode_cabang == "") {
-                // alert('NRP Harus diIsi');
                 Swal.fire({
                     title: "Warning!",
                     text: "Kode Cabang belum terisi",
@@ -98,10 +110,8 @@
                 }).then((result) => {
                     $('#kode_cabang').focus();
                 });
-
                 return false;
             } else if (nama_cabang == "") {
-                // alert('NRP Harus diIsi');
                 Swal.fire({
                     title: "Warning!",
                     text: "Nama Cabang belum terisi",
@@ -110,11 +120,8 @@
                 }).then((result) => {
                     $('#nama_cabang').focus();
                 });
-
                 return false;
-
             } else if (lokasi_cabang == "") {
-                // alert('NRP Harus diIsi');
                 Swal.fire({
                     title: "Warning!",
                     text: "Lokasi Cabang belum terisi",
@@ -123,10 +130,8 @@
                 }).then((result) => {
                     $('#lokasi_cabang').focus();
                 });
-
                 return false;
             } else if (radius_cabang == "") {
-                // alert('NRP Harus diIsi');
                 Swal.fire({
                     title: "Warning!",
                     text: "Radius Cabang belum terisi",
@@ -135,9 +140,9 @@
                 }).then((result) => {
                     $('#radius_cabang').focus();
                 });
-
                 return false;
             }
+            // Jika lokasi2_cabang diisi, bisa tambahkan validasi format koordinat jika perlu, tapi untuk sekarang opsional
         });
     });
 </script>
