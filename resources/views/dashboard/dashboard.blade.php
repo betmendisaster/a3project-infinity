@@ -1,6 +1,5 @@
 @extends('layouts.absensi')
 @section('content')
-
     <div class="pb-20">
         <div
             class="relative flex flex-col items-center bg-white shadow-lg rounded-lg p-4 w-full max-w-xs md:max-w-md lg:max-w-lg mx-auto">
@@ -157,10 +156,11 @@
             </div>
 
         </div>
-        @include('dashboard.modalDashboard')
+        @include('dashboard.modalDashboard', compact('presensiHariIni', 'namaKaryawan', 'nrpKaryawan'))
 
 
         @push('myscript')
+
             <script>
                 function updateTimeAndDate() {
                     const now = new Date();

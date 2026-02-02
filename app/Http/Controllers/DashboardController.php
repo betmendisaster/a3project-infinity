@@ -90,13 +90,23 @@ class DashboardController extends Controller
                     if ($isShiftMalam) {
                         $isTimeout = ($jam > $timeoutTime);
                     } else {
-                        $isTimeout = true;
+                        $isTimeout = true; // Shift normal sudah lewat hari
                     }
+                } else {
+                    // PERBAIKAN: Jika timeoutTime null, anggap timeout untuk safety
+                    $isTimeout = true;
                 }
+
+                // PERBAIKAN: Tambah logging untuk debug
+                \Log::info("Dashboard shift malam check: nrp=$nrp, kemarin=$kemarin, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime, jam=$jam, isTimeout=$isTimeout");
 
                 if (!$isTimeout) {
                     $activePresensiDate = $kemarin;
                 }
+            } else {
+                // PERBAIKAN: Jika jamKerjaKemarin null, anggap timeout
+                $isTimeout = true;
+                \Log::warning("Jam kerja kemarin tidak ditemukan untuk nrp=$nrp, hari=$namahariKemarin");
             }
         }
 
@@ -107,6 +117,18 @@ class DashboardController extends Controller
             ->where('nrp', $nrp)
             ->where('tgl_presensi', $activePresensiDate)
             ->first();
+
+        // PERBAIKAN: Jika presensi hari aktif null dan ada presensi kemarin yang belum out, gunakan kemarin sebagai fallback
+        if (!$presensiHariIni && $cekKemarin > 0) {
+            $presensiHariIni = DB::table('presensi')
+                ->where('nrp', $nrp)
+                ->where('tgl_presensi', $kemarin)
+                ->first();
+            \Log::info("Fallback ke presensi kemarin: nrp=$nrp, presensiHariIni=" . ($presensiHariIni ? 'ada' : 'null'));
+        }
+
+        // PERBAIKAN: Tambah logging untuk konfirmasi data presensi
+        \Log::info("Dashboard presensi aktif: nrp=$nrp, activePresensiDate=$activePresensiDate, presensiHariIni=" . ($presensiHariIni ? 'ada' : 'null'));
 
         // ===========================
         // Histori presensi bulan ini
@@ -158,7 +180,7 @@ class DashboardController extends Controller
             'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis'
         ));
     }
-
+    
     public function dashboardadmin()
     {
         $totalUsers = DB::table('karyawan')->count();

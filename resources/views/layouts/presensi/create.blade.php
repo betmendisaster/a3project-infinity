@@ -93,8 +93,16 @@
                         <p>Jam Out : {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
                         <p></p>
                     </div>
-                    {{-- Tombol Ganti Shift dipindahkan ke sini, di bawah jam --}}
-                    @if(!$presensiHariIni)  {{-- PERUBAHAN: Ganti dari @if($cek == 0) --}}
+                    {{-- PERBAIKAN: Tambah cek shift malam kemarin untuk tombol konfirmasi shift --}}
+                    {{-- PERBAIKAN: Jika shift malam kemarin belum out, jangan tampilkan tombol konfirmasi --}}
+                    @php
+                        // PERBAIKAN: Cek apakah ada presensi hari kemarin yang belum out dan shift malam
+                        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime(date("Y-m-d"))));
+                        $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', Auth::guard('karyawan')->user()->nrp)->whereNull('jam_out')->first();
+                        $isShiftMalamKemarin = $presensiKemarin && $presensiKemarin->is_shift_malam == 1;
+                        $showKonfirmasiShift = !$presensiHariIni && !$isShiftMalamKemarin; // Jangan tampilkan jika shift malam kemarin belum out
+                    @endphp
+                    @if($showKonfirmasiShift)
                         <button id="btnKonfirmasiShift" class="text-xs bg-red-500 text-white rounded px-2 py-1 mt-2 cursor-pointer hover:bg-red-700 transition duration-300 shadow-sm flex items-center gap-1">
                             <i class="fa-solid fa-arrows-alt-h"></i> Konfirmasi Shift
                         </button>
@@ -110,8 +118,6 @@
                 </div>
             </div>
             <div class="flex gap-2 justify-center mt-2">
-
-
                 <button id="btnCapture"
                     class="bg-green-500 text-white px-4 py-3 rounded-full text-sm font-bold 
                         shadow-lg hidden flex items-center gap-2 
@@ -119,7 +125,6 @@
                     <span id="btnIcon">📸</span>
                     <span id="btnText">ABSEN</span>
                 </button>
-
             </div>
 
             <div class="items-center shadow-lg rounded-lg p-4 w-full max-w-xs md:max-w-md lg:max-w-lg mx-auto">
@@ -202,9 +207,12 @@
 @push('myscript')
 <script>
 /* ================= STATUS ABSEN ================= */
-const presensiHariIni = @json($presensiHariIni);
-const sudahAbsenIn = presensiHariIni !== null;
-const sudahAbsenOut = presensiHariIni && presensiHariIni.jam_out !== null;
+let presensiHariIni = @json($presensiHariIni); // Jadikan variabel global untuk update
+let sudahAbsenIn = presensiHariIni !== null;
+let sudahAbsenOut = presensiHariIni && presensiHariIni.jam_out !== null;
+// PERBAIKAN: Tambah cek shift malam kemarin untuk status absen
+const isShiftMalamKemarin = @json($isShiftMalamKemarin);
+let sudahAbsenInMalam = sudahAbsenIn || isShiftMalamKemarin; // Jika shift malam kemarin, anggap sudah absen in
 
 /* ================= GLOBAL ================= */
 let lokasiReady = false;
@@ -229,9 +237,8 @@ document.addEventListener("DOMContentLoaded", function () {
     startCameraAuto();
     startGeofenceRealtime();
 
-    @if(!$presensiHariIni)
-        $("#modalKonfirmasiShift").removeClass("hidden");
-    @endif
+    // PERBAIKAN: Cek dan tampilkan modal berdasarkan status terbaru
+    checkAndShowModal();
 });
 
 /* ================= JAM ================= */
@@ -323,14 +330,38 @@ function successRealtime(pos) {
         haptic("error");
     }
 }
-/* ================= CAMERA AUTO ================= */
-let video = document.getElementById('video');
-let canvas = document.getElementById('canvas');
-let stream = null;
-let cameraStarted = false;
-let faceDetector = ('FaceDetector' in window) ? new FaceDetector({ fastMode:true }) : null;
 
+async function detectFace() {
+    if (!faceDetector) return true;
+    const faces = await faceDetector.detect(video);
+    return faces.length > 0;
+}
+
+function setupButtonLabel() {
+    // PERBAIKAN: Gunakan sudahAbsenInMalam untuk mendukung shift malam
+    if (!sudahAbsenInMalam) {
+        $("#btnText").text("ABSEN IN");
+        $("#btnCapture").addClass("bg-green-500").removeClass("bg-blue-500");
+    } else if (!sudahAbsenOut) {
+        $("#btnText").text("ABSEN OUT");
+        $("#btnCapture").addClass("bg-blue-500").removeClass("bg-green-500");
+    } else {
+        $("#btnCapture").addClass("hidden");
+    }
+}
+
+/* ================= PERBAIKAN: Fungsi untuk cek dan tampilkan modal ================= */
+function checkAndShowModal() {
+    // PERBAIKAN: Jika belum absen in hari baru DAN shift malam kemarin sudah out, tampilkan modal
+    const showKonfirmasiShift = !sudahAbsenInMalam && !isShiftMalamKemarin; // Sesuaikan logika dengan backend
+    if (showKonfirmasiShift) {
+        $("#modalKonfirmasiShift").removeClass("hidden");
+    }
+}
+
+/* ================= CAMERA AUTO ================= */
 async function startCameraAuto() {
+    // PERBAIKAN: Gunakan sudahAbsenOut untuk mencegah kamera jika sudah out
     if (cameraStarted || sudahAbsenOut) return;
     cameraStarted = true;
 
@@ -347,34 +378,8 @@ async function startCameraAuto() {
     }
 }
 
-async function detectFace() {
-    if (!faceDetector) return true;
-    const faces = await faceDetector.detect(video);
-    return faces.length > 0;
-}
-
-/* ================= BUTTON ================= */
-function setupButtonLabel() {
-    if (!sudahAbsenIn) {
-        $("#btnText").text("ABSEN IN");
-        $("#btnCapture").addClass("bg-green-500").removeClass("bg-blue-500");
-    } else if (!sudahAbsenOut) {
-        $("#btnText").text("ABSEN OUT");
-        $("#btnCapture").addClass("bg-blue-500").removeClass("bg-green-500");
-    } else {
-        $("#btnCapture").addClass("hidden");
-    }
-}
-
-function resetButton() {
-    $("#btnCapture").prop("disabled", false).removeClass("btn-disabled");
-    $("#btnIcon").text("📸");
-    setupButtonLabel();
-}
-
 /* ================= ABSEN ================= */
 $("#btnCapture").on("click", async function () {
-
     $("#btnCapture").prop("disabled", true).addClass("btn-disabled");
     $("#btnIcon").text("⏳");
     $("#btnText").text("MEMPROSES...");
@@ -403,9 +408,15 @@ $("#btnCapture").on("click", async function () {
         if (status[0]==="success") {
             haptic("success");
             status[2]==="in" ? notifikasi_in.play() : notifikasi_out.play();
-            if (watchId) navigator.geolocation.clearWatch(watchId);
-            Swal.fire('Berhasil', status[1], 'success');
-            setTimeout(()=>location.href='/dashboard',2000);
+            // PERBAIKAN: Update status absen setelah berhasil, lalu reload halaman untuk refresh modal dan status
+            sudahAbsenInMalam = (status[2] === "in") || sudahAbsenInMalam;
+            sudahAbsenOut = (status[2] === "out") || sudahAbsenOut;
+            setupButtonLabel(); // Update tombol
+            checkAndShowModal(); // Update modal
+            Swal.fire('Berhasil', status[1], 'success').then(() => {
+                // PERBAIKAN: Reload halaman untuk memastikan status terbaru dari backend
+                location.reload();
+            });
         } else {
             haptic("error");
             Swal.fire('Gagal', status[1], 'error');
@@ -448,6 +459,3 @@ function hitungJarak(lat1, lon1, lat2, lon2) {
 }
 </script>
 @endpush
-
-
-

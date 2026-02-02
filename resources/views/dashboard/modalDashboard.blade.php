@@ -4,6 +4,7 @@ $namaKaryawan = $user->nama ?? '-';
 $nrpKaryawan = $user->nrp ?? '-';
 @endphp
 
+{{-- Perbaikan: Update watermark untuk menggunakan tanggal dan jam dari data presensi --}}
 <!-- Modal In -->
 <div id="imageModalIn"
     class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center px-3 transition-opacity duration-300">
@@ -43,7 +44,8 @@ $nrpKaryawan = $user->nrp ?? '-';
                         <div>NRP: {{ $nrpKaryawan }}</div>
 
                         <div class="mt-1 border-t border-white/30 pt-1">
-                            <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                            {{-- PERBAIKAN: Gunakan tanggal dari tgl_presensi, bukan date('d-m-Y') --}}
+                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiHariIni->tgl_presensi)) }}</div>
                             <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
                             <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
                         </div>
@@ -96,7 +98,8 @@ $nrpKaryawan = $user->nrp ?? '-';
                         <div>NRP: {{ $nrpKaryawan }}</div>
 
                         <div class="mt-1 border-t border-white/30 pt-1">
-                            <div><strong>Tanggal:</strong> {{ date('d-m-Y') }}</div>
+                            {{-- PERBAIKAN: Gunakan tanggal dari tgl_presensi, bukan date('d-m-Y') --}}
+                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiHariIni->tgl_presensi)) }}</div>
                             <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
                             <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
                         </div>
