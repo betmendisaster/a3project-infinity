@@ -157,7 +157,13 @@
 
         </div>
         {{-- @include('dashboard.modalDashboard', compact('presensiHariIni', 'namaKaryawan', 'nrpKaryawan')) --}}
-
+        @php
+            $user = Auth::guard('karyawan')->user();
+            $namaKaryawan = $user->nama ?? 'N/A';
+            $nrpKaryawan = $user->nrp ?? 'N/A';
+        @endphp
+        
+        @include('dashboard.modalDashboard', compact('presensiHariIni'))
 
         @push('myscript')
 
