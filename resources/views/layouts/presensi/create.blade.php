@@ -215,6 +215,7 @@ const isShiftMalamKemarin = @json($isShiftMalamKemarin);
 let sudahAbsenInMalam = sudahAbsenIn || isShiftMalamKemarin; // Jika shift malam kemarin, anggap sudah absen in
 
 /* ================= GLOBAL ================= */
+let cameraStarted = false; 
 let lokasiReady = false;
 let currentLat = null;
 let currentLng = null;
