@@ -156,7 +156,7 @@
             </div>
 
         </div>
-        @include('dashboard.modalDashboard', compact('presensiHariIni', 'namaKaryawan', 'nrpKaryawan'))
+        {{-- @include('dashboard.modalDashboard', compact('presensiHariIni', 'namaKaryawan', 'nrpKaryawan')) --}}
 
 
         @push('myscript')
