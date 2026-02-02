@@ -1,7 +1,7 @@
 @php
 $user = Auth::guard('karyawan')->user();
-$namaKaryawan = $user->nama ?? '-';
-$nrpKaryawan = $user->nrp ?? '-';
+$namaKaryawan = $user->nama ?? 'N/A';
+$nrpKaryawan = $user->nrp ?? 'N/A';
 @endphp
 
 {{-- Perbaikan: Update watermark untuk menggunakan tanggal dan jam dari data presensi --}}
