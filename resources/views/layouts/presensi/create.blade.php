@@ -295,7 +295,7 @@ function successRealtime(pos) {
     if (!mapAbsensi) {
         mapAbsensi = L.map('map').setView([currentLat, currentLng], 16);
         L.tileLayer(
-            'http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+            'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
             { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }
         ).addTo(mapAbsensi);
 
