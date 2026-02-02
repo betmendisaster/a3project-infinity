@@ -332,10 +332,15 @@ function successRealtime(pos) {
     }
 }
 
+//async function detectFace() {
+  //  if (!faceDetector) return true;
+   // const faces = await faceDetector.detect(video);
+    // return faces.length > 0;
+// }
+
 async function detectFace() {
-    if (!faceDetector) return true;
-    const faces = await faceDetector.detect(video);
-    return faces.length > 0;
+    // Disabled: Deteksi wajah tidak diperlukan, selalu return true untuk lanjut absen
+    return true;
 }
 
 function setupButtonLabel() {
