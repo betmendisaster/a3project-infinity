@@ -168,7 +168,7 @@ class PresensiController extends Controller
                 ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
                 ->where('kode_dept',$kode_dept)->where('hari',$namahariKerja)->first(); // Gunakan hari kerja
         }
-        
+        // 
         // PERBAIKAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
         $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
         
