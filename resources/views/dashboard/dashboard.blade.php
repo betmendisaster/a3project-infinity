@@ -89,7 +89,8 @@
                     <div class="flex flex-col items-center ml-2">
                         <p class="text-md font-bold">Masuk</p>
                         <p class="text-xs">
-                            {{ $presensiHariIni != null ? $presensiHariIni->jam_in : 'Belum Absen' }}
+                            {{-- PERBAIKAN: Format jam menggunakan date() --}}
+                            {{ $presensiHariIni != null && $presensiHariIni->jam_in != null ? date('H:i:s', strtotime($presensiHariIni->jam_in)) : 'Belum Absen' }}
                         </p>
                     </div>
                     <i class="fas fa-camera text-xl absolute right-3 top-1/2 -translate-y-1/2"></i>
@@ -104,7 +105,8 @@
                     <div class="flex flex-col items-center ml-2">
                         <p class="text-md font-bold">Pulang</p>
                         <p class="text-xs">
-                            {{ $presensiHariIni != null && $presensiHariIni->jam_out != null ? $presensiHariIni->jam_out : 'Belum Absen' }}
+                            {{-- PERBAIKAN: Format jam menggunakan date() --}}
+                            {{ $presensiHariIni != null && $presensiHariIni->jam_out != null ? date('H:i:s', strtotime($presensiHariIni->jam_out)) : 'Belum Absen' }}
                         </p>
                     </div>
                     <i class="fas fa-camera text-xl absolute right-3 top-1/2 -translate-y-1/2"></i>
@@ -162,8 +164,8 @@
             $namaKaryawan = $user->nama ?? 'N/A';
             $nrpKaryawan = $user->nrp ?? 'N/A';
         @endphp
-        
-        @include('dashboard.modalDashboard', compact('presensiHariIni'))
+        {{-- PERBAIKAN: Hapus query $jamKerjaModal yang tidak digunakan --}}
+        @include('dashboard.modalDashboard', compact('presensiHariIni', 'activePresensiDate'))  {{-- Tambahkan activePresensiDate untuk konsistensi --}}
 
         @push('myscript')
 

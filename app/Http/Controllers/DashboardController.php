@@ -7,25 +7,25 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
-        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
-            \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
-            return null;
-        }
+    // private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
+    //     if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
+    //         \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
+    //         return null;
+    //     }
 
-        try {
-            $timestampAkhir = strtotime($akhirJamPulang);
-            if ($timestampAkhir === false) return null;
+    //     try {
+    //         $timestampAkhir = strtotime($akhirJamPulang);
+    //         if ($timestampAkhir === false) return null;
 
-            $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
-            if ($timestampTimeout === false) return null;
+    //         $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
+    //         if ($timestampTimeout === false) return null;
 
-            return date("H:i:s", $timestampTimeout);
-        } catch (\Exception $e) {
-            \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
-            return null;
-        }
-    }
+    //         return date("H:i:s", $timestampTimeout);
+    //     } catch (\Exception $e) {
+    //         \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
+    //         return null;
+    //     }
+    // }
 
     private function getHariFromDate($dateString) {
         $day = date("D", strtotime($dateString));
@@ -41,6 +41,39 @@ class DashboardController extends Controller
         };
     }
 
+    // PERBAIKAN: Tambahkan fungsi baru untuk cek shift selesai (untuk bottom navbar)
+    public function getShiftStatus() {
+        $nrp = Auth::guard('karyawan')->user()->nrp;
+        $today = date("Y-m-d");
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+        $jamSekarang = date("H:i:s");
+        
+        // Cek presensi hari ini
+        $presensiHariIni = DB::table('presensi')->where('tgl_presensi', $today)->where('nrp', $nrp)->first();
+        // Cek presensi kemarin (untuk shift malam)
+        $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->first();
+        
+        $shiftSelesai = false;
+        if (($presensiHariIni && !is_null($presensiHariIni->jam_out)) || ($presensiKemarin && !is_null($presensiKemarin->jam_out))) {
+            // Ambil akhir_jam_pulang dari jamKerja terkait
+            $hariKerja = $presensiHariIni ? $today : $kemarin;
+            $namahariKerja = $this->getHariFromDate($hariKerja);
+            $jamKerja = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKerja)->first();
+            if(!$jamKerja){
+                $jamKerja = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKerja)->first();
+            }
+            if ($jamKerja && $jamSekarang <= $jamKerja->akhir_jam_pulang) {
+                $shiftSelesai = true; // Block jika shift selesai sebelum akhir_jam_pulang
+            } // Jika >= akhir_jam_pulang, reset, tidak block
+        }
+        
+        return $shiftSelesai;
+    }
     public function index()
     {
         $hariIni = date("Y-m-d");
@@ -56,13 +89,12 @@ class DashboardController extends Controller
         $cekKemarin = DB::table('presensi')
             ->where('tgl_presensi', $kemarin)
             ->where('nrp', $nrp)
-            ->whereNull('jam_out')
-            ->count();
+            ->count();  // PERBAIKAN: Hitung semua presensi kemarin, bukan hanya yang jam_out null
 
         $isTimeout = false;
         $activePresensiDate = $hariIni;
 
-        if ($cekKemarin > 0) {
+        if ($cekKemarin > 0) {  // PERBAIKAN: Jika ada presensi kemarin, set activePresensiDate ke kemarin
             $namahariKemarin = $this->getHariFromDate($kemarin);
 
             $jamKerjaKemarin = DB::table('settings_jam_kerja')
@@ -84,21 +116,15 @@ class DashboardController extends Controller
                 $jamPulang = $jamKerjaKemarin->jam_pulang;
                 $isShiftMalam = ($jamPulang < $jamMasuk);
 
-                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
-
-                if ($timeoutTime !== null) {
-                    if ($isShiftMalam) {
-                        $isTimeout = ($jam > $timeoutTime);
-                    } else {
-                        $isTimeout = true; // Shift normal sudah lewat hari
-                    }
+                // PERBAIKAN: Hapus timeout +2 jam, gunakan akhir_jam_pulang langsung
+                if ($isShiftMalam) {
+                    $isTimeout = ($jam > $akhirJamPulang);
                 } else {
-                    // PERBAIKAN: Jika timeoutTime null, anggap timeout untuk safety
-                    $isTimeout = true;
+                    $isTimeout = true; // Shift normal sudah lewat hari
                 }
 
                 // PERBAIKAN: Tambah logging untuk debug
-                \Log::info("Dashboard shift malam check: nrp=$nrp, kemarin=$kemarin, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime, jam=$jam, isTimeout=$isTimeout");
+                \Log::info("Dashboard shift malam check: nrp=$nrp, kemarin=$kemarin, isShiftMalam=$isShiftMalam, akhirJamPulang=$akhirJamPulang, jam=$jam, isTimeout=$isTimeout");
 
                 if (!$isTimeout) {
                     $activePresensiDate = $kemarin;
@@ -113,22 +139,49 @@ class DashboardController extends Controller
         // ===========================
         // Ambil presensi hari aktif
         // ===========================
-        $presensiHariIni = DB::table('presensi')
-            ->where('nrp', $nrp)
-            ->where('tgl_presensi', $activePresensiDate)
-            ->first();
-
-        // PERBAIKAN: Jika presensi hari aktif null dan ada presensi kemarin yang belum out, gunakan kemarin sebagai fallback
-        if (!$presensiHariIni && $cekKemarin > 0) {
+        try {
             $presensiHariIni = DB::table('presensi')
                 ->where('nrp', $nrp)
-                ->where('tgl_presensi', $kemarin)
+                ->where('tgl_presensi', $activePresensiDate)
                 ->first();
-            \Log::info("Fallback ke presensi kemarin: nrp=$nrp, presensiHariIni=" . ($presensiHariIni ? 'ada' : 'null'));
-        }
 
-        // PERBAIKAN: Tambah logging untuk konfirmasi data presensi
+            // PERBAIKAN: Jika tidak ada atau jam_out null, cek presensi hari ini untuk shift malam (absen out hari ini)
+            if (!$presensiHariIni || is_null($presensiHariIni->jam_out)) {
+                $presensiHariIni = DB::table('presensi')
+                    ->where('nrp', $nrp)
+                    ->where('tgl_presensi', date("Y-m-d"))
+                    ->first();
+            }
+
+            // PERBAIKAN: Jika masih null, cari presensi terakhir dengan jam_out null (untuk shift malam yang belum selesai)
+            if (!$presensiHariIni) {
+                $presensiHariIni = DB::table('presensi')
+                    ->where('nrp', $nrp)
+                    ->whereNull('jam_out')
+                    ->orderBy('tgl_presensi', 'desc')
+                    ->first();
+            }
+
+            // PERBAIKAN: Jika jam_out masih null, gabungkan dari hari ini (untuk shift malam)
+            if ($presensiHariIni && is_null($presensiHariIni->jam_out)) {
+                $presensiOut = DB::table('presensi')
+                    ->where('nrp', $nrp)
+                    ->where('tgl_presensi', date("Y-m-d"))
+                    ->whereNotNull('jam_out')
+                    ->first();
+                if ($presensiOut) {
+                    $presensiHariIni->jam_out = $presensiOut->jam_out;
+                    $presensiHariIni->foto_out = $presensiOut->foto_out;
+                    $presensiHariIni->lokasi_out = $presensiOut->lokasi_out;
+                }
+            }
+        } catch (\Exception $e) {
+            // PERBAIKAN: Log error dan set null untuk menghindari crash
+            \Log::error("Error fetching presensiHariIni: " . $e->getMessage());
+            $presensiHariIni = null;
+        }
         \Log::info("Dashboard presensi aktif: nrp=$nrp, activePresensiDate=$activePresensiDate, presensiHariIni=" . ($presensiHariIni ? 'ada' : 'null'));
+        \Log::info("Dashboard jam_in: " . ($presensiHariIni->jam_in ?? 'null') . ", jam_out: " . ($presensiHariIni->jam_out ?? 'null'));  // PERBAIKAN: Tambah logging untuk debug jam_out
 
         // ===========================
         // Histori presensi bulan ini
@@ -175,12 +228,22 @@ class DashboardController extends Controller
             9 => "September", 10 => "Oktober", 11 => "November", 12 => "Desember"
         ];
 
+        // PERBAIKAN: Query untuk modal (pindah dari view untuk keamanan)
+        $presensiModalIn = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $activePresensiDate)->whereNotNull('foto_in')->first();
+        if (!$presensiModalIn) {
+            $presensiModalIn = DB::table('presensi')->where('nrp', $nrp)->whereNotNull('foto_in')->orderBy('tgl_presensi', 'desc')->first();
+        }
+
+        $presensiModalOut = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $activePresensiDate)->whereNotNull('foto_out')->first();
+        if (!$presensiModalOut) {
+            $presensiModalOut = DB::table('presensi')->where('nrp', $nrp)->whereNotNull('foto_out')->orderBy('tgl_presensi', 'desc')->first();
+        }
+
         return view("dashboard.dashboard", compact(
             'presensiHariIni', 'historiBulanIni', 'namaBulan', 
-            'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis'
+            'bulanIni', 'tahunIni', 'rekapPresensi', 'rekapCis', 'activePresensiDate', 'presensiModalIn', 'presensiModalOut'  // Tambahkan ini
         ));
-    }
-    
+    } 
     public function dashboardadmin()
     {
         $totalUsers = DB::table('karyawan')->count();

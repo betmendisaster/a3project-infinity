@@ -144,12 +144,15 @@
                 <div class="mt-3 text-center">
                     <h3 class="text-lg font-medium text-gray-900">Konfirmasi Shift Hari Ini</h3>
                     <p class="text-sm text-gray-600 mt-2">Hari: {{ app('App\Http\Controllers\PresensiController')->getHari() }}, {{ app('App\Http\Controllers\PresensiController')->getTanggalSekarang() }}</p>
-                    <div class="mt-4 text-left">
-                        <p><strong>Nama Shift:</strong> {{ $jamKerja->nama_jam_kerja }}</p>
-                        <p><strong>Jam Masuk:</strong> {{ date('H:i', strtotime($jamKerja->jam_masuk)) }}</p>
-                        <p><strong>Jam Pulang:</strong> {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
-                        <p class="mt-4 text-gray-700">Shift pian sudah sesuai kah ? mun belum silakan ganti dulu shift nya</p>
-                    </div>
+                    {{-- Di bagian modalKonfirmasiShift --}}
+                        <div class="mt-4 text-left">
+                            <p><strong>Nama Shift:</strong> {{ $jamKerja->nama_jam_kerja }}</p>
+                            <p><strong>Jam Masuk:</strong> {{ date('H:i', strtotime($jamKerja->jam_masuk)) }}</p>
+                            <p><strong>Akhir Jam Masuk:</strong> {{ date('H:i', strtotime($jamKerja->akhir_jam_masuk)) }}</p>
+                            <p><strong>Jam Pulang:</strong> {{ date('H:i', strtotime($jamKerja->jam_pulang)) }}</p>
+                            <p><strong>Akhir Jam Pulang:</strong> {{ date('H:i', strtotime($jamKerja->akhir_jam_pulang)) }}</p>
+                            <p class="mt-4 text-gray-700">Shift pian sudah sesuai kah ? mun belum silakan ganti dulu shift nya</p>
+                        </div>
                     <div class="flex justify-center mt-4">
                         <button id="btnSudahBenar" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-700 mr-2">Ya, Sudah Benar</button>
                         <button id="btnBukaGantiShift" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700">Ganti Shift</button>

@@ -20,11 +20,9 @@
             </div>
         </a>
         <div class="flex items-center justify-center">
-            <a href="/presensi/create"
-                id="btnAbsenSekarang"
-                data-shift-selesai="{{ $shiftSelesai ? '1' : '0' }}">
-                <button data-tooltip-target="tooltip-new" type="button"
-                    class="inline-flex items-center justify-center w-10 h-10 text-lg text-white bg-blue-500 rounded-full hover:bg-blue-700 group focus:ring-4 focus:ring-blue-300 focus:outline-none dark:focus:ring-blue-800">
+            <a href="/presensi/create" id="btnAbsenSekarang" data-shift-selesai="{{ app('App\Http\Controllers\DashboardController')->getShiftStatus() ? '1' : '0' }}">
+                <button data-tooltip-target="tooltip-new" type="button" 
+                    class="inline-flex items-center justify-center w-10 h-10 text-lg text-white bg-blue-500 rounded-full hover:bg-blue-700 group focus:ring-4 focus:ring-blue-300 focus:outline-none dark:focus:ring-blue-800 {{ app('App\Http\Controllers\DashboardController')->getShiftStatus() ? 'opacity-50 cursor-not-allowed' : '' }}">
                     <i class="fas fa-camera text-xl"></i>
                     <span class="sr-only">Absen</span>
                 </button>

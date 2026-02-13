@@ -72,330 +72,339 @@ class PresensiController extends Controller
         }
     }
 
-    private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
-        // Validasi input: Pastikan format waktu benar
-        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
-            \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
-            return null; // Return null jika format salah
-        }
+    // private function calculateTimeoutTime($akhirJamPulang, $isShiftMalam) {
+    //     // Validasi input: Pastikan format waktu benar
+    //     if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $akhirJamPulang)) {
+    //         \Log::error("Format akhirJamPulang tidak valid: $akhirJamPulang");
+    //         return null; // Return null jika format salah
+    //     }
 
-        try {
-            // Konversi akhir_jam_pulang ke timestamp
-            $timestampAkhir = strtotime($akhirJamPulang);
-            if ($timestampAkhir === false) {
-                \Log::error("Gagal mengkonversi akhirJamPulang ke timestamp: $akhirJamPulang");
-                return null;
-            }
+    //     try {
+    //         // Konversi akhir_jam_pulang ke timestamp
+    //         $timestampAkhir = strtotime($akhirJamPulang);
+    //         if ($timestampAkhir === false) {
+    //             \Log::error("Gagal mengkonversi akhirJamPulang ke timestamp: $akhirJamPulang");
+    //             return null;
+    //         }
 
-            // Kurangi 2 jam
-            $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
-            if ($timestampTimeout === false) {
-                \Log::error("Gagal menghitung timeout untuk akhirJamPulang: $akhirJamPulang");
-                return null;
-            }
+    //         // Kurangi 2 jam
+    //         $timestampTimeout = strtotime("-2 hours", $timestampAkhir);
+    //         if ($timestampTimeout === false) {
+    //             \Log::error("Gagal menghitung timeout untuk akhirJamPulang: $akhirJamPulang");
+    //             return null;
+    //         }
 
-            // Konversi kembali ke format "H:i:s"
-            $timeoutTime = date("H:i:s", $timestampTimeout);
+    //         // Konversi kembali ke format "H:i:s"
+    //         $timeoutTime = date("H:i:s", $timestampTimeout);
 
-            // Logging untuk debug (opsional, hapus di production)
-            \Log::info("Timeout calculated: akhirJamPulang=$akhirJamPulang, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime");
+    //         // Logging untuk debug (opsional, hapus di production)
+    //         \Log::info("Timeout calculated: akhirJamPulang=$akhirJamPulang, isShiftMalam=$isShiftMalam, timeoutTime=$timeoutTime");
 
-            return $timeoutTime;
-        } catch (\Exception $e) {
-            // Tangani exception jika ada (misal error strtotime)
-            \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
-            return null;
-        }
-    }
+    //         return $timeoutTime;
+    //     } catch (\Exception $e) {
+    //         // Tangani exception jika ada (misal error strtotime)
+    //         \Log::error("Exception in calculateTimeoutTime: " . $e->getMessage());
+    //         return null;
+    //     }
+    // }
 
-public function create(){
-    $today = date("Y-m-d");
-    $namahari = $this->getHari();
-    $nrp = Auth::guard('karyawan')->user()->nrp;
-    
-    $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
-    
-    // PERBAIKAN SHIFT MALAM: Cek apakah ada presensi hari kemarin yang belum out dan shift malam
-    $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
-    $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->first();
-    $isShiftMalamKemarin = $presensiKemarin && $presensiKemarin->is_shift_malam == 1;
-    
-    // Jika shift malam kemarin belum out, gunakan hari kemarin sebagai hari kerja
-    if ($isShiftMalamKemarin) {
-        $hariKerja = $kemarin;
-        $namahariKerja = $this->getHariFromDate($kemarin);
-    } else {
-        $hariKerja = $today;
-        $namahariKerja = $namahari;
-    }
-    
-    // Ubah: Ambil data presensi lengkap berdasarkan hari kerja
-    $presensiHariIni = DB::table('presensi')->where('tgl_presensi', $hariKerja)->where('nrp', $nrp)->first();
-    
-    // Jika sudah ada jam_out, redirect dengan pesan (shift sudah selesai)
-    if ($presensiHariIni && !is_null($presensiHariIni->jam_out)) {
-        return redirect('/dashboard')->with(['warning' => 'Shift Anda hari ini sudah selesai. Tidak perlu absen out lagi.']);
-    }
-    
-    $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
-    $lok_site = DB::table('cabang')->where('kode_cabang',$kode_cabang)->first();
-    $jamKerja = DB::table('settings_jam_kerja')
-        ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-        ->where('nrp',$nrp)->where('hari',$namahariKerja)->first(); // Gunakan hari kerja
-
-    if($jamKerja == null){
-        $jamKerja = DB::table('settings_jk_dept_detail')
-            ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
-            ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-            ->where('kode_dept',$kode_dept)->where('hari',$namahariKerja)->first(); // Gunakan hari kerja
-    }
-    
-    // PERUBAHAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
-    $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
-    
-    $jam = date("H:i:s");
-    $isTimeout = false;
-    $tglBugar = $hariKerja; // Default: hari kerja (bukan hari ini)
-    
-    if ($cekKemarin > 0 && !$isShiftMalamKemarin) { // Hanya jika bukan shift malam kemarin
-        $namahariKemarin = $this->getHariFromDate($kemarin);
-        $jamKerjaKemarin = DB::table('settings_jam_kerja')
-            ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-            ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
-        if ($jamKerjaKemarin == null) {
-            $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
-                ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
-                ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+    public function create(){
+        $today = date("Y-m-d");
+        $namahari = $this->getHari();
+        $nrp = Auth::guard('karyawan')->user()->nrp;
+        $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
+        
+        // PERBAIKAN SHIFT MALAM: Cek apakah ada presensi hari kemarin yang belum out dan shift malam
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+        $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->first();
+        $isShiftMalamKemarin = $presensiKemarin && $presensiKemarin->is_shift_malam == 1;
+        
+        // Jika shift malam kemarin belum out, gunakan hari kemarin sebagai hari kerja
+        if ($isShiftMalamKemarin) {
+            $hariKerja = $kemarin;
+            $namahariKerja = $this->getHariFromDate($kemarin);
+        } else {
+            $hariKerja = $today;
+            $namahariKerja = $namahari;
         }
         
-        if ($jamKerjaKemarin) {
-            $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
-            $jamMasuk = $jamKerjaKemarin->jam_masuk;
-            $jamPulang = $jamKerjaKemarin->jam_pulang;
-            $isShiftMalam = ($jamPulang < $jamMasuk);
-            
-            $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
-            
-            if ($isShiftMalam) {
-                $isTimeout = ($jam > $timeoutTime);
-            } else {
-                $isTimeout = true; // Hari kemarin sudah lewat
+        // Ubah: Ambil data presensi lengkap berdasarkan hari kerja
+        $presensiHariIni = DB::table('presensi')->where('tgl_presensi', $hariKerja)->where('nrp', $nrp)->first();
+        
+        // PERBAIKAN: Cek apakah shift sudah selesai (jam_out ada DAN waktu <= akhir_jam_pulang) atau waktu >= akhir_jam_pulang (reset)
+        $jamSekarang = date("H:i:s");
+        $shiftSelesai = false;
+        if ($presensiHariIni && !is_null($presensiHariIni->jam_out)) {
+            // Ambil jamKerja untuk cek akhir_jam_pulang
+            $jamKerja = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKerja)->first();
+            if($jamKerja == null){
+                $jamKerja = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept',$kode_dept)->where('hari',$namahariKerja)->first();
+            }
+            if ($jamKerja) {
+                if ($jamSekarang <= $jamKerja->akhir_jam_pulang) {
+                    $shiftSelesai = true; // Shift selesai sebelum akhir_jam_pulang, block akses
+                } // Jika >= akhir_jam_pulang, anggap reset, izinkan akses baru
+            }
+        }
+        
+        if ($shiftSelesai) {
+            return redirect('/dashboard')->with(['warning' => 'Shift Anda hari ini sudah selesai. Tidak perlu absen lagi.']);
+        }
+        
+        $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
+        $lok_site = DB::table('cabang')->where('kode_cabang',$kode_cabang)->first();
+        $jamKerja = DB::table('settings_jam_kerja')
+            ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+            ->where('nrp',$nrp)->where('hari',$namahariKerja)->first(); // Gunakan hari kerja
+
+        if($jamKerja == null){
+            $jamKerja = DB::table('settings_jk_dept_detail')
+                ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('kode_dept',$kode_dept)->where('hari',$namahariKerja)->first(); // Gunakan hari kerja
+        }
+        
+        // PERBAIKAN: Cek bugar selamat berdasarkan hari kerja (hari absen in), bukan hari kalender
+        $cekKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->count();
+        
+        $jam = date("H:i:s");
+        $isTimeout = false;
+        $tglBugar = $hariKerja; // Default: hari kerja (bukan hari ini)
+        
+        if ($cekKemarin > 0 && !$isShiftMalamKemarin) { // Hanya jika bukan shift malam kemarin
+            $namahariKemarin = $this->getHariFromDate($kemarin);
+            $jamKerjaKemarin = DB::table('settings_jam_kerja')
+                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+            if ($jamKerjaKemarin == null) {
+                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
             }
             
-            if (!$isTimeout) {
-                $tglBugar = $kemarin; // Gunakan kemarin jika belum timeout
+            if ($jamKerjaKemarin) {
+                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+                $jamMasuk = $jamKerjaKemarin->jam_masuk;
+                $jamPulang = $jamKerjaKemarin->jam_pulang;
+                $isShiftMalam = ($jamPulang < $jamMasuk);
+                
+                // PERBAIKAN: Gunakan akhir_jam_pulang langsung tanpa timeout
+                if ($isShiftMalam) {
+                    $isTimeout = ($jam > $akhirJamPulang);
+                } else {
+                    $isTimeout = true; // Hari kemarin sudah lewat
+                }
+                
+                if (!$isTimeout) {
+                    $tglBugar = $kemarin; // Gunakan kemarin jika belum timeout
+                }
             }
+        }
+        
+        $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
+        if ($cekBugar == 0) {
+            return redirect('/presensi/bugar-selamat');
+        }
+        
+        if($jamKerja == null){
+            return view ('layouts.presensi.notifJadwal');                
+        } else {
+            // Pass $presensiHariIni ke view untuk pengecekan di frontend
+            return view('layouts.presensi.create', compact('presensiHariIni','lok_site','jamKerja'));
         }
     }
     
-    $cekBugar = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
-    if ($cekBugar == 0) {
-        return redirect('/presensi/bugar-selamat');
-    }
-    
-    if($jamKerja == null){
-        return view ('layouts.presensi.notifJadwal');                
-    } else {
-        // Pass $presensiHariIni ke view untuk pengecekan di frontend
-        return view('layouts.presensi.create', compact('presensiHariIni','lok_site','jamKerja'));
-    }   
-}
     public function store(Request $request)
-{
-    $request->validate([
-        'lokasi' => 'required|string',
-        'image' => 'required|string', // Base64
-    ]);
+    {
+        $request->validate([
+            'lokasi' => 'required|string',
+            'image' => 'required|string', // Base64
+        ]);
 
-    $nrp = Auth::guard('karyawan')->user()->nrp;
-    $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
-    $tgl_presensi = date("Y-m-d");
-    $jam = date("H:i:s");
-    $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
+        $nrp = Auth::guard('karyawan')->user()->nrp;
+        $kode_cabang = Auth::guard('karyawan')->user()->kode_cabang;
+        $tgl_presensi = date("Y-m-d");
+        $jam = date("H:i:s");
+        $kode_dept = Auth::guard('karyawan')->user()->kode_dept;
 
-    // PERBAIKAN: Cek shift malam kemarin yang belum out
-    $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($tgl_presensi)));
-    $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->first();
-    $isShiftMalamKemarin = $presensiKemarin && $presensiKemarin->is_shift_malam == 1;
+        // PERBAIKAN: Cek shift malam kemarin yang belum out
+        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($tgl_presensi)));
+        $presensiKemarin = DB::table('presensi')->where('tgl_presensi', $kemarin)->where('nrp', $nrp)->whereNull('jam_out')->first();
+        $isShiftMalamKemarin = $presensiKemarin && $presensiKemarin->is_shift_malam == 1;
 
-    // Jika shift malam kemarin belum out, prioritaskan absen out untuk hari kemarin
-    if ($isShiftMalamKemarin) {
-        // Gunakan data presensi kemarin sebagai $cek
-        $cek = $presensiKemarin;
-        $hariPresensi = $kemarin; // Hari absen in adalah kemarin
-    } else {
-        // Shift normal: Cek presensi hari ini
-        $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->first();
-        $hariPresensi = $tgl_presensi;
-    }
-
-    // LOKASI 1 (Utama) - Tetap sama
-    $lok_site = DB::table('cabang')->where('kode_cabang', $kode_cabang)->first();
-    $lok = explode(",", $lok_site->lokasi_cabang);
-    $latitudeSite = $lok[0];
-    $longitudeSite = $lok[1];
-    $lokasi = $request->lokasi;
-    $lokasiUser = explode(",", $lokasi);
-    $latitudeUser = $lokasiUser[0];
-    $longitudeUser = $lokasiUser[1];
-
-    $jarak1 = $this->distance($latitudeSite, $longitudeSite, $latitudeUser, $longitudeUser);
-    $radius1 = round($jarak1['meters']);
-
-    // LOKASI 2 (Opsional, jika ada) - Tetap sama
-    $isValidLocation = false;
-    $radius2 = null;
-    if ($lok_site->lokasi2_cabang) {
-        $lok2 = explode(",", $lok_site->lokasi2_cabang);
-        $latitudeSite2 = $lok2[0];
-        $longitudeSite2 = $lok2[1];
-        $jarak2 = $this->distance($latitudeSite2, $longitudeSite2, $latitudeUser, $longitudeUser);
-        $radius2 = round($jarak2['meters']);
-        if ($radius2 <= $lok_site->radius_cabang) {
-            $isValidLocation = true;
+        // Jika shift malam kemarin belum out, prioritaskan absen out untuk hari kemarin
+        if ($isShiftMalamKemarin) {
+            // Gunakan data presensi kemarin sebagai $cek
+            $cek = $presensiKemarin;
+            $hariPresensi = $kemarin; // Hari absen in adalah kemarin
+        } else {
+            // Shift normal: Cek presensi hari ini
+            $cek = DB::table('presensi')->where('tgl_presensi', $tgl_presensi)->where('nrp', $nrp)->first();
+            $hariPresensi = $tgl_presensi;
         }
-    }
 
-    // Cek apakah dalam radius salah satu lokasi - Tetap sama
-    if ($radius1 > $lok_site->radius_cabang && !$isValidLocation) {
-        $errorMsg = "Maaf anda berada diluar radius absensi, jarak anda adalah " . $radius1 . " Meter dari lokasi utama";
-        if ($radius2 !== null) {
-            $errorMsg .= " dan " . $radius2 . " Meter dari lokasi kedua";
+        // LOKASI 1 (Utama) - Tetap sama
+        $lok_site = DB::table('cabang')->where('kode_cabang', $kode_cabang)->first();
+        $lok = explode(",", $lok_site->lokasi_cabang);
+        $latitudeSite = $lok[0];
+        $longitudeSite = $lok[1];
+        $lokasi = $request->lokasi;
+        $lokasiUser = explode(",", $lokasi);
+        $latitudeUser = $lokasiUser[0];
+        $longitudeUser = $lokasiUser[1];
+
+        $jarak1 = $this->distance($latitudeSite, $longitudeSite, $latitudeUser, $longitudeUser);
+        $radius1 = round($jarak1['meters']);
+
+        // LOKASI 2 (Opsional, jika ada) - Tetap sama
+        $isValidLocation = false;
+        $radius2 = null;
+        if ($lok_site->lokasi2_cabang) {
+            $lok2 = explode(",", $lok_site->lokasi2_cabang);
+            $latitudeSite2 = $lok2[0];
+            $longitudeSite2 = $lok2[1];
+            $jarak2 = $this->distance($latitudeSite2, $longitudeSite2, $latitudeUser, $longitudeUser);
+            $radius2 = round($jarak2['meters']);
+            if ($radius2 <= $lok_site->radius_cabang) {
+                $isValidLocation = true;
+            }
         }
-        $errorMsg .= " dari lokasi absensi|radius";
-        echo "error|" . $errorMsg;
-        return;
-    }
 
-    $image = $request->image;
-    $folderPath = "uploads/absensi/";
-    $formatName = $nrp . "-" . $hariPresensi . "-" . ($cek ? "out" : "in"); // Gunakan $hariPresensi
-    $image_parts = explode(";base64", $image);
-    $image_base64 = base64_decode($image_parts[1]);
-    $fileName = $formatName . ".png";
-    $file = $folderPath . $fileName;
-
-    if ($cek) {
-        // Tambahan: Cek apakah jam_out sudah ada
-        if (!is_null($cek->jam_out)) {
-            echo "error|Anda sudah absen out hari ini. Shift sudah selesai.|out";
+        // Cek apakah dalam radius salah satu lokasi - Tetap sama
+        if ($radius1 > $lok_site->radius_cabang && !$isValidLocation) {
+            $errorMsg = "Maaf anda berada diluar radius absensi, jarak anda adalah " . $radius1 . " Meter dari lokasi utama";
+            if ($radius2 !== null) {
+                $errorMsg .= " dan " . $radius2 . " Meter dari lokasi kedua";
+            }
+            $errorMsg .= " dari lokasi absensi|radius";
+            echo "error|" . $errorMsg;
             return;
         }
 
-        // PERBAIKAN SHIFT MALAM: Jika shift malam, ambil jamKerja dari hari presensi (hari in), bukan hari saat ini
-        $isShiftMalam = $cek->is_shift_malam == 1; // Gunakan flag dari DB
-        if ($isShiftMalam) {
-            // Untuk shift malam, gunakan hari dari tgl_presensi (hari in)
-            $hariPresensi = $cek->tgl_presensi; // Sudah diatur di atas
-            $jamKerja = DB::table('settings_jam_kerja')
-                ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
-                ->where('nrp', $nrp)->where('hari', $this->getHariFromDate($hariPresensi))->first();
+        $image = $request->image;
+        $folderPath = "uploads/absensi/";
+        $formatName = $nrp . "-" . $hariPresensi . "-" . ($cek ? "out" : "in"); // Gunakan $hariPresensi
+        $image_parts = explode(";base64", $image);
+        $image_base64 = base64_decode($image_parts[1]);
+        $fileName = $formatName . ".png";
+        $file = $folderPath . $fileName;
 
-            if (!$jamKerja) {
-                $jamKerja = DB::table('settings_jk_dept_detail')
-                    ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
-                    ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
-                    ->where('kode_dept', $kode_dept)->where('hari', $this->getHariFromDate($hariPresensi))->first();
+        if ($cek) {
+            // Tambahan: Cek apakah jam_out sudah ada
+            if (!is_null($cek->jam_out)) {
+                echo "error|Anda sudah absen out hari ini. Shift sudah selesai.|out";
+                return;
+            }
+
+            // PERBAIKAN SHIFT MALAM: Jika shift malam, ambil jamKerja dari hari presensi (hari in), bukan hari saat ini
+            $isShiftMalam = $cek->is_shift_malam == 1; // Gunakan flag dari DB
+            if ($isShiftMalam) {
+                // Untuk shift malam, gunakan hari dari tgl_presensi (hari in)
+                $hariPresensi = $cek->tgl_presensi; // Sudah diatur di atas
+                $jamKerja = DB::table('settings_jam_kerja')
+                    ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                    ->where('nrp', $nrp)->where('hari', $this->getHariFromDate($hariPresensi))->first();
+
+                if (!$jamKerja) {
+                    $jamKerja = DB::table('settings_jk_dept_detail')
+                        ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
+                        ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                        ->where('kode_dept', $kode_dept)->where('hari', $this->getHariFromDate($hariPresensi))->first();
+                }
+            } else {
+                // Shift normal: Gunakan hari saat ini
+                $namahari = $this->getHari();
+                $jamKerja = DB::table('settings_jam_kerja')
+                    ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                    ->where('nrp', $nrp)->where('hari', $namahari)->first();
+
+                if (!$jamKerja) {
+                    $jamKerja = DB::table('settings_jk_dept_detail')
+                        ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
+                        ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
+                        ->where('kode_dept', $kode_dept)->where('hari', $namahari)->first();
+                }
+            }
+
+            // PERBAIKAN: Validasi absen out tanpa timeout +2 jam
+            $canAbsenOut = true;
+            if ($isShiftMalam) {
+                // Untuk shift malam: Cek hanya <= akhir_jam_pulang (tidak ada toleransi)
+                $canAbsenOut = ($jam <= $jamKerja->akhir_jam_pulang);
+            } else {
+                $canAbsenOut = ($jam >= $jamKerja->awal_jam_pulang && $jam <= $jamKerja->akhir_jam_pulang);
+            }
+
+            if (!$canAbsenOut) {
+                echo "error|Belum waktunya atau sudah terlambat absen out|out";
+                return;
+            }
+
+            $data_pulang = [
+                'jam_out' => $jam,
+                'foto_out' => $fileName,
+                'lokasi_out' => $lokasi,
+                'is_shift_malam' => $isShiftMalam ? 1 : 0, // Pastikan flag tetap
+            ];
+            $update = DB::table('presensi')->where('tgl_presensi', $hariPresensi)->where('nrp', $nrp)->update($data_pulang); // Gunakan $hariPresensi
+            if ($update) {
+                $pesan = "Terimakasih, Selamat Beristirahat, Hati - Hati di Jalan~";
+                echo "success|$pesan|out";
+                Storage::put($file, $image_base64);
+            } else {
+                echo "error|Maaf absen gagal, silahkan hubungi tim IT|out";
             }
         } else {
-            // Shift normal: Gunakan hari saat ini
+            // Absen in: Tetap seperti sebelumnya, tapi pastikan bukan shift malam yang belum selesai
+            if ($isShiftMalamKemarin) {
+                echo "error|Shift malam kemarin belum selesai. Lakukan absen out terlebih dahulu.|in";
+                return;
+            }
+
             $namahari = $this->getHari();
             $jamKerja = DB::table('settings_jam_kerja')
                 ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
                 ->where('nrp', $nrp)->where('hari', $namahari)->first();
 
-            if (!$jamKerja) {
+            if ($jamKerja == null) {
                 $jamKerja = DB::table('settings_jk_dept_detail')
                     ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
                     ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
                     ->where('kode_dept', $kode_dept)->where('hari', $namahari)->first();
             }
-        }
 
-        // Validasi absen out
-        $canAbsenOut = true;
-        if ($isShiftMalam) {
-            // Untuk shift malam: Cek timeout, tapi PERBAIKAN: Jika sudah lewat timeout, masih izinkan absen out dengan peringatan
-            $timeoutTime = $this->calculateTimeoutTime($jamKerja->akhir_jam_pulang, $isShiftMalam);
-            if ($timeoutTime === null) {
-                echo "error|Gagal menghitung waktu timeout untuk shift malam. Hubungi tim IT.|out";
-                return;
-            }
-            $canAbsenOut = ($jam <= $timeoutTime);
-            if (!$canAbsenOut) {
-                // PERBAIKAN: Izinkan absen out tapi beri peringatan terlambat
-                \Log::warning("Absen out shift malam terlambat: nrp=$nrp, jam=$jam, timeout=$timeoutTime");
-                // Tetap lanjutkan, tapi bisa tambah flag terlambat jika perlu
-            }
-        } else {
-            $canAbsenOut = ($jam >= $jamKerja->awal_jam_pulang && $jam <= $jamKerja->akhir_jam_pulang);
-        }
-
-        if (!$canAbsenOut && !$isShiftMalam) { // Untuk shift normal, tetap cegah jika tidak dalam waktu
-            echo "error|Belum waktunya atau sudah terlambat absen out|out";
-            return;
-        }
-
-        $data_pulang = [
-            'jam_out' => $jam,
-            'foto_out' => $fileName,
-            'lokasi_out' => $lokasi,
-            'is_shift_malam' => $isShiftMalam ? 1 : 0, // Pastikan flag tetap
-        ];
-        $update = DB::table('presensi')->where('tgl_presensi', $hariPresensi)->where('nrp', $nrp)->update($data_pulang); // Gunakan $hariPresensi
-        if ($update) {
-            $pesan = $isShiftMalam && !$canAbsenOut ? "Terimakasih, Selamat Beristirahat (Absen Out Terlambat), Hati - Hati di Jalan~" : "Terimakasih, Selamat Beristirahat, Hati - Hati di Jalan~";
-            echo "success|$pesan|out";
-            Storage::put($file, $image_base64);
-        } else {
-            echo "error|Maaf absen gagal, silahkan hubungi tim IT|out";
-        }
-    } else {
-        // Absen in: Tetap seperti sebelumnya, tapi pastikan bukan shift malam yang belum selesai
-        if ($isShiftMalamKemarin) {
-            echo "error|Shift malam kemarin belum selesai. Lakukan absen out terlebih dahulu.|in";
-            return;
-        }
-
-        $namahari = $this->getHari();
-        $jamKerja = DB::table('settings_jam_kerja')
-            ->join('jam_kerja', 'settings_jam_kerja.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
-            ->where('nrp', $nrp)->where('hari', $namahari)->first();
-
-        if ($jamKerja == null) {
-            $jamKerja = DB::table('settings_jk_dept_detail')
-                ->join('settings_jk_dept', 'settings_jk_dept_detail.kode_jk_dept', '=', 'settings_jk_dept.kode_jk_dept')
-                ->join('jam_kerja', 'settings_jk_dept_detail.kode_jam_kerja', '=', 'jam_kerja.kode_jam_kerja')
-                ->where('kode_dept', $kode_dept)->where('hari', $namahari)->first();
-        }
-
-        if ($jam < $jamKerja->awal_jam_masuk) {
-            echo "error|Belum Waktunya Melakukan Presensi|in";
-        } elseif ($jam > $jamKerja->akhir_jam_masuk) {
-            echo "error|Waktu Untuk Take Absen In Sudah Habis|in";
-        } else {
-            $isShiftMalam = ($jamKerja->jam_pulang < $jamKerja->jam_masuk); // Deteksi shift malam
-            $data = [
-                'nrp' => $nrp,
-                'tgl_presensi' => $tgl_presensi,
-                'jam_in' => $jam,
-                'foto_in' => $fileName,
-                'lokasi_in' => $lokasi,
-                'kode_jam_kerja' => $jamKerja->kode_jam_kerja,
-                'status' => 'h',
-                'is_shift_malam' => $isShiftMalam ? 1 : 0, // Tambah flag
-            ];
-            $simpan = DB::table('presensi')->insert($data);
-            if ($simpan) {
-                echo "success|Terimakasih, Selamat Bekerja~|in";
-                Storage::put($file, $image_base64);
+            if ($jam < $jamKerja->awal_jam_masuk) {
+                echo "error|Belum Waktunya Melakukan Presensi|in";
+            } elseif ($jam > $jamKerja->akhir_jam_masuk) {
+                echo "error|Waktu Untuk Take Absen In Sudah Habis|in";
             } else {
-                echo "error|Maaf absen gagal, silahkan hubungi tim IT|in";
+                $isShiftMalam = ($jamKerja->jam_pulang < $jamKerja->jam_masuk); // Deteksi shift malam
+                $data = [
+                    'nrp' => $nrp,
+                    'tgl_presensi' => $tgl_presensi,
+                    'jam_in' => $jam,
+                    'foto_in' => $fileName,
+                    'lokasi_in' => $lokasi,
+                    'kode_jam_kerja' => $jamKerja->kode_jam_kerja,
+                    'status' => 'h',
+                    'is_shift_malam' => $isShiftMalam ? 1 : 0, // Tambah flag
+                ];
+                $simpan = DB::table('presensi')->insert($data);
+                if ($simpan) {
+                    echo "success|Terimakasih, Selamat Bekerja~|in";
+                    Storage::put($file, $image_base64);
+                } else {
+                    echo "error|Maaf absen gagal, silahkan hubungi tim IT|in";
+                }
             }
         }
     }
-}
     // untuk menghitung jarak titik koordinat absensi
     function distance($lat1, $lon1, $lat2, $lon2)
     {
@@ -932,55 +941,60 @@ public function create(){
     }
 
     public function bugarSelamat() {
-        $nrp = Auth::guard('karyawan')->user()->nrp;
-        $today = date("Y-m-d");
-        $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+    $nrp = Auth::guard('karyawan')->user()->nrp;
+    $today = date("Y-m-d");
+    $kemarin = date("Y-m-d", strtotime("-1 day", strtotime($today)));
+    
+    $cekKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->count();
+    $jam = date("H:i:s");
+    $isTimeout = false;
+    $tglBugar = $today;
+    
+    if ($cekKemarin > 0) {
+        $namahariKemarin = $this->getHariFromDate($kemarin);
+        $jamKerjaKemarin = DB::table('settings_jam_kerja')
+            ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+            ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
+        if ($jamKerjaKemarin == null) {
+            $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
+                ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
+                ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
+                ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+        }
         
-        $cekKemarin = DB::table('presensi')->where('nrp', $nrp)->where('tgl_presensi', $kemarin)->whereNull('jam_out')->count();
-        $jam = date("H:i:s");
-        $isTimeout = false;
-        $tglBugar = $today;
-        
-        if ($cekKemarin > 0) {
-            $namahariKemarin = $this->getHariFromDate($kemarin);
-            $jamKerjaKemarin = DB::table('settings_jam_kerja')
-                ->join('jam_kerja','settings_jam_kerja.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                ->where('nrp',$nrp)->where('hari',$namahariKemarin)->first();
-            if ($jamKerjaKemarin == null) {
-                $jamKerjaKemarin = DB::table('settings_jk_dept_detail')
-                    ->join('settings_jk_dept','settings_jk_dept_detail.kode_jk_dept','=','settings_jk_dept.kode_jk_dept')
-                    ->join('jam_kerja','settings_jk_dept_detail.kode_jam_kerja','=','jam_kerja.kode_jam_kerja')
-                    ->where('kode_dept', Auth::guard('karyawan')->user()->kode_dept)->where('hari',$namahariKemarin)->first();
+        if ($jamKerjaKemarin) {
+            $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
+            $jamMasuk = $jamKerjaKemarin->jam_masuk;
+            $jamPulang = $jamKerjaKemarin->jam_pulang;
+            $isShiftMalam = ($jamPulang < $jamMasuk);
+            
+            // PERBAIKAN: Gunakan akhir_jam_pulang langsung tanpa timeout
+            if ($isShiftMalam) {
+                $isTimeout = ($jam > $akhirJamPulang);
+            } else {
+                $isTimeout = true; // Hari kemarin sudah lewat
             }
             
-            if ($jamKerjaKemarin) {
-                $akhirJamPulang = $jamKerjaKemarin->akhir_jam_pulang;
-                $jamMasuk = $jamKerjaKemarin->jam_masuk;
-                $jamPulang = $jamKerjaKemarin->jam_pulang;
-                $isShiftMalam = ($jamPulang < $jamMasuk);
-                
-                $timeoutTime = $this->calculateTimeoutTime($akhirJamPulang, $isShiftMalam);
-                
-                if ($isShiftMalam) {
-                    $isTimeout = ($jam > $timeoutTime);
-                } else {
-                    $isTimeout = true; // Hari kemarin sudah lewat
-                }
-                
-                if (!$isTimeout) {
-                    $tglBugar = $kemarin;
-                }
+            if (!$isTimeout) {
+                $tglBugar = $kemarin;
             }
         }
-        
-        $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
-        if ($cek > 0) {
-            return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.']);
-        }
-        
-        return view('layouts.presensi.bugar.bugarSelamat');
     }
     
+    // PERBAIKAN: Cek apakah shift sudah selesai (block akses bugar jika shift selesai sebelum akhir_jam_pulang)
+    $hariKerja = $tglBugar;
+    $presensiHariKerja = DB::table('presensi')->where('tgl_presensi', $hariKerja)->where('nrp', $nrp)->first();
+    if ($presensiHariKerja && !is_null($presensiHariKerja->jam_out) && $jam <= $akhirJamPulang) {
+        return redirect('/dashboard')->with(['warning' => 'Shift Anda sudah selesai. Tidak perlu isi bugar selamat lagi.']);
+    }
+    
+    $cek = DB::table('bugar_selamat')->where('nrp', $nrp)->where('tgl_presensi', $tglBugar)->count();
+    if ($cek > 0) {
+        return redirect('/presensi/create')->with(['warning' => 'Anda sudah mengisi data Bugar Selamat untuk shift ini.']);
+    }
+    
+    return view('layouts.presensi.bugar.bugarSelamat');
+}
     // Fungsi untuk menyimpan data bugar selamat
     public function storeBugarSelamat(Request $request) {
         $nrp = Auth::guard('karyawan')->user()->nrp;

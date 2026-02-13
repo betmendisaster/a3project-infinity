@@ -1,10 +1,4 @@
-{{-- @php
-$user = Auth::guard('karyawan')->user();
-$namaKaryawan = $user->nama ?? 'N/A';
-$nrpKaryawan = $user->nrp ?? 'N/A';
-@endphp --}}
-
-{{-- Perbaikan: Update watermark untuk menggunakan tanggal dan jam dari data presensi --}}
+{{-- Perbaikan: Hapus query DB dari view, gunakan data dari controller --}}
 <!-- Modal In -->
 <div id="imageModalIn"
     class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center px-3 transition-opacity duration-300">
@@ -23,9 +17,9 @@ $nrpKaryawan = $user->nrp ?? 'N/A';
 
         <!-- Content -->
         <div class="relative bg-black flex items-center justify-center">
-            @if ($presensiHariIni && $presensiHariIni->foto_in)
+            @if ($presensiModalIn && $presensiModalIn->foto_in)
                 @php
-                    $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_in);
+                    $path = Storage::url('uploads/absensi/' . $presensiModalIn->foto_in);
                 @endphp
 
                 <!-- FRAME FOTO -->
@@ -40,14 +34,13 @@ $nrpKaryawan = $user->nrp ?? 'N/A';
                     <!-- WATERMARK -->
                     <div class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm leading-snug">
                         
-                        <div class="font-semibold">{{ $namaKaryawan }}</div>
-                        <div>NRP: {{ $nrpKaryawan }}</div>
+                        <div class="font-semibold">{{ Auth::guard('karyawan')->user()->nama }}</div>
+                        <div>NRP: {{ Auth::guard('karyawan')->user()->nrp }}</div>
 
                         <div class="mt-1 border-t border-white/30 pt-1">
-                            {{-- PERBAIKAN: Gunakan tanggal dari tgl_presensi, bukan date('d-m-Y') --}}
-                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiHariIni->tgl_presensi)) }}</div>
-                            <div><strong>Jam:</strong> {{ $presensiHariIni->jam_in }}</div>
-                            <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_in ?? 'Lokasi Absen' }}</div>
+                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiModalIn->tgl_presensi)) }}</div>
+                            <div><strong>Jam:</strong> {{ $presensiModalIn->jam_in }}</div>
+                            <div><strong>Lokasi:</strong> {{ $presensiModalIn->lokasi_in ?? 'Lokasi Absen' }}</div>
                         </div>
                     </div>
                 </div>
@@ -78,9 +71,9 @@ $nrpKaryawan = $user->nrp ?? 'N/A';
         
         <!-- Content -->
         <div class="relative bg-black flex items-center justify-center">
-            @if ($presensiHariIni && $presensiHariIni->foto_out)
+            @if ($presensiModalOut && $presensiModalOut->foto_out)
                 @php
-                    $path = Storage::url('uploads/absensi/' . $presensiHariIni->foto_out);
+                    $path = Storage::url('uploads/absensi/' . $presensiModalOut->foto_out);
                 @endphp
 
                 <!-- FRAME FOTO -->
@@ -94,14 +87,13 @@ $nrpKaryawan = $user->nrp ?? 'N/A';
                     <!-- WATERMARK -->
                     <div class="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-[11px] md:text-xs px-3 py-2 rounded-lg backdrop-blur-sm leading-snug">
                         
-                        <div class="font-semibold">{{ $namaKaryawan }}</div>
-                        <div>NRP: {{ $nrpKaryawan }}</div>
+                        <div class="font-semibold">{{ Auth::guard('karyawan')->user()->nama }}</div>
+                        <div>NRP: {{ Auth::guard('karyawan')->user()->nrp }}</div>
 
                         <div class="mt-1 border-t border-white/30 pt-1">
-                            {{-- PERBAIKAN: Gunakan tanggal dari tgl_presensi, bukan date('d-m-Y') --}}
-                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiHariIni->tgl_presensi)) }}</div>
-                            <div><strong>Jam:</strong> {{ $presensiHariIni->jam_out }}</div>
-                            <div><strong>Lokasi:</strong> {{ $presensiHariIni->lokasi_out ?? 'Lokasi Absen' }}</div>
+                            <div><strong>Tanggal:</strong> {{ date('d-m-Y', strtotime($presensiModalOut->tgl_presensi)) }}</div>
+                            <div><strong>Jam:</strong> {{ $presensiModalOut->jam_out }}</div>
+                            <div><strong>Lokasi:</strong> {{ $presensiModalOut->lokasi_out ?? 'Lokasi Absen' }}</div>
                         </div>
                     </div>
                 </div>
